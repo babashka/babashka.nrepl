@@ -1,4 +1,5 @@
 (ns sci-nrepl.server-test
+  {:author "Michiel Borkent"}
   (:require
    [sci-nrepl.bencode :as bencode]
    [sci-nrepl.server :refer [start-server! stop-server!]]
@@ -10,7 +11,13 @@
 
 (set! *warn-on-reflection* true)
 
-(def namespaces {})
+(def namespaces
+  ;; fake namespaces for symbol completion tests
+  {
+   'cheshire.core {'generate-string 'foo
+                   'somethingelse 'bar}
+   'clojure.test {'deftest 'foo
+                  'somethingelse 'bar}})
 
 (defn bytes->str [x]
   (if (bytes? x) (String. (bytes x))
