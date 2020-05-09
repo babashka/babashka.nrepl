@@ -2,7 +2,7 @@
   {:author "Michiel Borkent"
    :no-doc true}
   (:refer-clojure :exclude [send future binding])
-  (:require [sci-nrepl.bencode :refer [read-bencode]]
+  (:require [bencode.core :refer [read-bencode]]
             [sci-nrepl.utils :refer [dev? response-for send send-exception
                                      replying-print-writer]]
             [clojure.string :as str]

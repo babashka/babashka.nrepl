@@ -1,11 +1,10 @@
 (ns sci-nrepl.server-test
   {:author "Michiel Borkent"}
-  (:require
-   [sci-nrepl.bencode :as bencode]
-   [sci-nrepl.server :refer [start-server! stop-server!]]
-   [sci-nrepl.test-utils :as test-utils]
-   [clojure.test :as t :refer [deftest is testing]]
-   [sci.impl.opts :refer [init]]))
+  (:require [bencode.core :as bencode]
+            [sci-nrepl.server :as server]
+            [sci-nrepl.test-utils :as test-utils]
+            [clojure.test :as t :refer [deftest is testing]]
+            [sci.impl.opts :refer [init]]))
 
 (def debug? false)
 
