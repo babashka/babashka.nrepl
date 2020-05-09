@@ -194,6 +194,8 @@
                           host+port)
         socket-server (new ServerSocket port 0 address)]
     (println "Started nREPL server at" host+port)
-    (println "For more info visit https://github.com/borkdude/babashka/blob/master/doc/repl.md#nrepl.")
     (reset! server socket-server)
-    (listen ctx socket-server)))
+    (try
+      (listen ctx socket-server)
+      (finally
+        (reset! server nil)))))

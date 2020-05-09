@@ -7,7 +7,7 @@
 
 (set! *warn-on-reflection* true)
 
-(def dev? (volatile! nil))
+(def dev? (volatile! false))
 
 (defn response-for [old-msg msg]
   (let [session (get old-msg :session "none")

@@ -10,6 +10,9 @@
 
 (set! *warn-on-reflection* true)
 
+;; test on a non standard port to minimise repl interference
+(def nrepl-test-port 54345)
+
 (def namespaces
   ;; fake namespaces for symbol completion tests
   {
@@ -48,8 +51,8 @@
           (when debug? (prn "skipping over msg" msg))
           (recur))))))
 
-(defn nrepl-test []
-  (with-open [socket (java.net.Socket. "127.0.0.1" 1667)
+(defn nrepl-test [port]
+  (with-open [socket (java.net.Socket. "127.0.0.1" port)
               in (.getInputStream socket)
               in (java.io.PushbackInputStream. in)
               os (.getOutputStream socket)]
@@ -183,13 +186,15 @@
   (let [proc-state (atom nil)]
     (try
       (future
-        (start-server!
+        (server/start-server!
          (init {:namespaces namespaces
-                :features #{:bb}}) "0.0.0.0:1667"))
-      (test-utils/wait-for-port "localhost" 1667)
-      (nrepl-test)
+                :features #{:bb}}) (format "0.0.0.0:%d" nrepl-test-port)))
+      (Thread/sleep 1000)
+      (assert @server/server "server failed")
+      (test-utils/wait-for-port "localhost" nrepl-test-port)
+      (nrepl-test nrepl-test-port)
       (finally
-        (stop-server!)))))
+        (server/stop-server!)))))
 
 ;;;; Scratch
 
