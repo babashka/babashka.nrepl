@@ -183,7 +183,7 @@
     (reset! server nil)))
 
 (defn start-server! [ctx host+port]
-  (vreset! dev? (= "true" (System/getenv "BABASHKA_DEV")))
+  (vreset! dev? (not (empty? (System/getenv "SCI_NREPL_DEBUG"))))
   (let [ctx (assoc ctx :sessions (atom #{}))
         parts (str/split host+port #":")
         [address port] (if (= 1 (count parts))
