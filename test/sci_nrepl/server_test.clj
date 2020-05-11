@@ -188,7 +188,10 @@
       (future
         (server/start-server!
          (init {:namespaces namespaces
-                :features #{:bb}}) (format "0.0.0.0:%d" nrepl-test-port)))
+                :features #{:bb}})
+         {:address "0.0.0.0"
+          :port nrepl-test-port
+          :debug (not (empty? (System/getenv "SCI_NREPL_DEBUG")))}))
       (Thread/sleep 1000)
       (assert @server/server "server failed")
       (test-utils/wait-for-port "localhost" nrepl-test-port)

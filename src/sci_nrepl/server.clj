@@ -182,18 +182,13 @@
     (.close ^ServerSocket s)
     (reset! server nil)))
 
-(defn start-server! [ctx host+port]
-  (vreset! dev? (not (empty? (System/getenv "SCI_NREPL_DEBUG"))))
+(defn start-server! [ctx {:keys [address port debug]
+                          :or {address "0.0.0.0"}}]
+  (vreset! dev? debug)
   (let [ctx (assoc ctx :sessions (atom #{}))
-        parts (str/split host+port #":")
-        [address port] (if (= 1 (count parts))
-                         [nil (Integer. ^String (first parts))]
-                         [(java.net.InetAddress/getByName (first parts))
-                          (Integer. ^String (second parts))])
-        host+port (if-not address (str "localhost:" port)
-                          host+port)
+        address (java.net.InetAddress/getByName address)
         socket-server (new ServerSocket port 0 address)]
-    (println "Started nREPL server at" host+port)
+    (println (format "Started nREPL server at %s:%d" (.getHostAddress address) port))
     (reset! server socket-server)
     (try
       (listen ctx socket-server)
