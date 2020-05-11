@@ -4,7 +4,13 @@ A Clojure library designed to facilitate adding nrepl support to your clojure pr
 
 ## Usage
 
-FIXME
+To start an nrepl in your project, call `sci-nrepl.server/start-server!`. The call takes two arguments, your initial sci context, and some options including the IP address to bind to, the port number and a debug flag. eg:
+
+```clojure
+(sci-nrepl/start-server! sci-ctx {:address "127.0.0.1" :port 2345 :debug true})
+```
+
+
 
 ## License
 
