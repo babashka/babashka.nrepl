@@ -12,7 +12,7 @@
         id (get old-msg :id "unknown")]
     (assoc msg "session" session "id" id)))
 
-(defn send [^OutputStream os msg {:keys [debug-send] :as opts}]
+(defn send [^OutputStream os msg {:keys [debug-send]}]
   (when debug-send (prn "Sending" msg))
   (write-bencode os msg)
   (.flush os))
