@@ -3,6 +3,8 @@
 A Clojure library designed to facilitate adding nrepl support to your
 clojure projects that use the small clojure interpreter, sci.
 
+Sci is available here: https://github.com/borkdude/sci
+
 ## Usage
 
 To start a server, call `sci-nrepl.server/start-server!`. To stop a
