@@ -178,13 +178,14 @@
   (.close ^ServerSocket socket))
 
 (defn start-server! [ctx & [{:keys [address port quiet]
-                             :or {address "0.0.0.0"}
+                             :or {address "0.0.0.0"
+                                  port 1667}
                              :as opts}]]
   (let [ctx (assoc ctx :sessions (atom #{}))
-        address (java.net.InetAddress/getByName address)
-        socket-server (new ServerSocket port 0 address)]
+        inet-address (java.net.InetAddress/getByName address)
+        socket-server (new ServerSocket port 0 inet-address)]
     (when-not quiet
-      (println (format "Started nREPL server at %s:%d" (.getHostAddress address) port)))
+      (println (format "Started nREPL server at %s:%d" (.getHostAddress inet-address) port)))
     {:socket socket-server
      :process (future
                 (listen ctx socket-server opts))}))
