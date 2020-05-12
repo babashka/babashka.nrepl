@@ -50,14 +50,54 @@ nil
 
 ### Tips and Tricks
 
+#### Blocking after launching
 
+Often you will want to launch the server and then block execution until the server is shutdown (at which point the code will continue executing), or ctrl-C is pressed (at which point the proess will exit). This can be easily achieved by derefing the returned `:future` value:
+
+```clojure
+(-> (sci-nrepl.server/start-server! sci-ctx {:address "127.0.0.1"
+                                             :port 1667})
+    :future
+    deref)
+```
+
+#### Complaints about resolving symbols in the nREPL
+
+When connecting to the nREPL you may recieve errors like:
+
+```
+;; nREPL:
+clojure.lang.ExceptionInfo: Could not resolve symbol: clojure.core/apply [at line 1, column 2]
+```
+
+You may also find a missing default namespace or core clojure functionality missing.
+
+```clojure
+;; nREPL:
+nil> (inc 1)
+clojure.lang.ExceptionInfo: Could not resolve symbol: inc [at line 1, column 2]
+```
+
+This is caused by an incomplete sci context var. Unlike `sci.core/eval-string`, the nREPL server does not do any further initialisation of the sci context, like bolting in default clojure bindings. It serves exactly the sci context you give it. And so, often a little extra initialisation is helpful by using `sci.impl.opts/init` to flesh out the sci context var.
+
+```clojure
+(sci-nrepl.server/start-server!
+    (sci.impl.opts/init sci-ctx)
+    {:address "127.0.0.1"
+     :port 1667})
+```
+
+You may also wish to add on futures support. For example:
+
+```clojure
+(-> sci-ctx
+    sci.addons/future
+    sci.impl.opts/init
+    sci-nrepl.server/start-server!)
+```
 
 ## License
 
-The project contains code by the following people under these terms
-
-The included code is Copyright © 2019-2020 Michiel Borkent
+The project code is Copyright © 2019-2020 Michiel Borkent
 
 It is distributed under the Eclipse Public License 1.0 (http://opensource.org/licenses/eclipse-1.0.php)
-
-Any submissions included in this project have copyrights assigned to Michiel Borkent and are distributed under the same license.
