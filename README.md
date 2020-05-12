@@ -4,12 +4,37 @@ A Clojure library designed to facilitate adding nrepl support to your clojure pr
 
 ## Usage
 
-To start an nrepl in your project, call `sci-nrepl.server/start-server!`. The call takes two arguments, your initial sci context, and some options including the IP address to bind to, the port number and a debug flag. eg:
+To start a server, call `sci-nrepl.server/start-server!`. To stop a server call `sci-nrepl.server/stop-server!`
+
+### Starting a Server
+
+To start an nrepl in your project, call `sci-nrepl.server/start-server!`. The call takes two arguments, your initial sci context, and some options including the IP address to bind to, the port number and optional debug and quiet flags. eg:
 
 ```clojure
 (sci-nrepl/start-server! sci-ctx {:address "127.0.0.1" :port 2345 :debug true})
 ```
 
+If `:debug` is set to `true`, the nrepl server will print to stdout all the messages it is receiving over the nrepl channel.
+
+If `:debug-send` is set to `true`, the server will also print the messages it is sending.
+
+if `:quiet` is set to `true`, the nrepl server will not print out the message "starting nREPL server at...". If not specified then the default `quiet` is false, and the message will be printed.
+
+If `:port` is not specified, the default babashka port of 1667 is used.
+
+If `:address` is not specified, a default of `0.0.0.0` is used (bind to every interface).
+
+If no options hashmap is specified at all, all the defaults will be used. Thus the following is a valid way to launch an nrepl server.
+
+```clojure
+(sci-nrepl/start-server! sci-ctx)
+```
+
+The `start-server!` call returns a hashmap with two keys. `:socket` holds the java Socket object that is bound and listening. And `:process` holds the future which contains the running server.
+
+### Stopping a Server
+
+Pass the hashmap you received from `start-server!` to `stop-server!` to close the server port and shut down the server.
 
 
 ## License
