@@ -187,5 +187,5 @@
     (when-not quiet
       (println (format "Started nREPL server at %s:%d" (.getHostAddress inet-address) port)))
     {:socket socket-server
-     :process (future
-                (listen ctx socket-server opts))}))
+     :future (future
+               (listen ctx socket-server opts))}))

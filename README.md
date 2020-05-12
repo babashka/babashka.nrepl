@@ -13,7 +13,7 @@ To start an nrepl in your project, call `sci-nrepl.server/start-server!`. The ca
 ```clojure
 (sci-nrepl.server/start-server! sci-ctx {:address "127.0.0.1" :port 23456})
 ;; => {:socket #object[java.net.ServerSocket 0x4ad88197 "ServerSocket[addr=/127.0.0.1,localport=23456]"],
-       :process #object[clojure.core$future_call$reify__8459 0x68a8273f {:status :pending, :val nil}]}
+       :future #object[clojure.core$future_call$reify__8459 0x68a8273f {:status :pending, :val nil}]}
 ```
 
 If `:debug` is set to `true`, the nrepl server will print to stdout all the messages it is receiving over the nrepl channel.
@@ -32,11 +32,11 @@ If no options hashmap is specified at all, all the defaults will be used. Thus t
 (sci-nrepl.server/start-server! sci-ctx)
 ;; Started nREPL server at 0.0.0.0:1667
 ;; => {:socket #object[java.net.ServerSocket 0x68867145 "ServerSocket[addr=/0.0.0.0,localport=1667]"],
-       :process #object[clojure.core$future_call$reify__8459 0x3061657 {:status :pending, :val nil}]}
+       :future #object[clojure.core$future_call$reify__8459 0x3061657 {:status :pending, :val nil}]}
 
 ```
 
-The `start-server!` call returns a hashmap with two keys. `:socket` holds the java Socket object that is bound and listening. And `:process` holds the future which contains the running server.
+The `start-server!` call returns a hashmap with two keys. `:socket` holds the java Socket object that is bound and listening. And `:future` holds the future which contains the running server.
 
 ### Stopping a Server
 
