@@ -121,6 +121,29 @@ You may also wish to add on futures support. For example:
     sci-nrepl.server/start-server!)
 ```
 
+#### Complaints about clojure.main/repl-requires
+
+Connecting to the nREPL from cider gives:
+
+```
+;; nREPL:
+clojure.lang.ExceptionInfo: Could not resolve symbol: clojure.main/repl-requires [at line 1, column 42]
+```
+
+This is because some nREPL clients use `clojure.main/repl-requires` to
+find a list of automatic requires to run at the beginning of the
+nREPL. Simply supply a value in you sci bound namespace for this
+value:
+
+```
+(-> sci-ctx
+    (assoc-in [:namespaces 'clojure.main 'repl-requires]
+        '[[clojure.repl :refer [dir doc]]])
+    sci.addons/future
+    sci.impl.opts/init
+    sci-nrepl.server/start-server!)
+```
+
 ## License
 
 The project code is Copyright © 2019-2020 Michiel Borkent
