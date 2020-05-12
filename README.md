@@ -137,7 +137,7 @@ find a list of automatic requires to run at the beginning of the
 nREPL. Simply supply a value in you sci bound namespace for this
 value:
 
-```
+```clojure
 (-> sci-ctx
     (assoc-in [:namespaces 'clojure.main 'repl-requires]
         '[[clojure.repl :refer [dir doc]]])
