@@ -4,7 +4,8 @@
             [sci-nrepl.server :as server]
             [sci-nrepl.test-utils :as test-utils]
             [clojure.test :as t :refer [deftest is testing]]
-            [sci.impl.opts :refer [init]]))
+            [sci.impl.opts :refer [init]])
+  (:import [java.net Socket]))
 
 (def debug? false)
 
@@ -51,8 +52,8 @@
           (when debug? (prn "skipping over msg" msg))
           (recur))))))
 
-(defn nrepl-test [port]
-  (with-open [socket (java.net.Socket. "127.0.0.1" port)
+(defn nrepl-test [^Integer port]
+  (with-open [socket (Socket. "127.0.0.1" port)
               in (.getInputStream socket)
               in (java.io.PushbackInputStream. in)
               os (.getOutputStream socket)]
@@ -183,21 +184,21 @@
             (is (= "Hello\n" (:out reply)))))))))
 
 (deftest nrepl-server-test
-  (let [proc-state (atom nil)]
+  (let [service (atom nil)]
     (try
-      (future
-        (server/start-server!
-         (init {:namespaces namespaces
-                :features #{:bb}})
-         {:address "0.0.0.0"
-          :port nrepl-test-port
-          :debug (not (empty? (System/getenv "SCI_NREPL_DEBUG")))}))
-      (Thread/sleep 1000)
-      (assert @server/server "server failed")
+      (reset! service
+              (server/start-server!
+               (init {:namespaces namespaces
+                      :features #{:bb}})
+               {:address "0.0.0.0"
+                :port nrepl-test-port
+                :debug false
+                :debug-send false
+                }))
       (test-utils/wait-for-port "localhost" nrepl-test-port)
       (nrepl-test nrepl-test-port)
       (finally
-        (server/stop-server!)))))
+        (server/stop-server! @service)))))
 
 ;;;; Scratch
 

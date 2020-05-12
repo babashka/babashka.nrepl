@@ -1,9 +1,9 @@
 (ns sci-nrepl.server
   {:author "Michiel Borkent"
    :no-doc true}
-  (:refer-clojure :exclude [send future binding])
+  (:refer-clojure :exclude [send binding])
   (:require [bencode.core :refer [read-bencode]]
-            [sci-nrepl.utils :refer [dev? response-for send send-exception
+            [sci-nrepl.utils :refer [response-for send send-exception
                                      replying-print-writer]]
             [clojure.string :as str]
             [clojure.tools.reader.reader-types :as r]
@@ -17,17 +17,17 @@
 
 (set! *warn-on-reflection* true)
 
-(defn eval-msg [ctx o msg]
+(defn eval-msg [ctx o msg {:keys [debug] :as opts}]
   (try
     (let [code-str (get msg :code)
           reader (r/indexing-push-back-reader (r/string-push-back-reader code-str))
           ns-str (get msg :ns)
           sci-ns (when ns-str (sci-utils/namespace-object (:env ctx) (symbol ns-str) true nil))]
-      (when @dev? (println "current ns" (vars/current-ns-name)))
+      (when debug (println "current ns" (vars/current-ns-name)))
       (sci/with-bindings (cond-> {}
                            sci-ns (assoc vars/current-ns sci-ns))
         (loop []
-          (let [pw (replying-print-writer o msg)
+          (let [pw (replying-print-writer o msg opts)
                 form (p/parse-next ctx reader)
                 value (if (identical? :edamame.impl.parser/eof form) ::nil
                           (sci/with-bindings {sci/out pw}
@@ -40,14 +40,14 @@
                             '*2 (get core '*1)
                             '*3 (get core '*2))))
             (send o (response-for msg (cond-> {"ns" (vars/current-ns-name)}
-                                        (not (identical? value ::nil)) (assoc "value" (pr-str value)))))
+                                        (not (identical? value ::nil)) (assoc "value" (pr-str value)))) opts)
             (when (not (identical? ::nil value))
               (recur)))))
-      (send o (response-for msg {"status" #{"done"}})))
+      (send o (response-for msg {"status" #{"done"}}) opts))
     (catch Exception ex
       (swap! (:env ctx) update-in [:namespaces 'clojure.core]
              assoc '*e ex)
-      (send-exception o msg ex))))
+      (send-exception o msg ex opts))))
 
 (defn fully-qualified-syms [ctx ns-sym]
   (let [syms (eval-string* ctx (format "(keys (ns-map '%s))" ns-sym))
@@ -66,7 +66,7 @@
               (when (re-find pat (str sym-ns "/" sym-name))
                 [sym-ns (str sym-ns "/" sym-name)]))))))
 
-(defn complete [ctx o msg]
+(defn complete [ctx o msg {:keys [debug] :as opts}]
   (try
     (let [ns-str (get msg :ns)
           sci-ns (when ns-str
@@ -94,23 +94,23 @@
               completions (mapv (fn [[namespace name]]
                                   {"candidate" (str name) "ns" (str namespace) #_"type" #_"function"})
                                 completions)]
-          (when @dev? (prn "completions" completions))
+          (when debug (prn "completions" completions))
           (send o (response-for msg {"completions" completions
-                                     "status" #{"done"}})))))
+                                     "status" #{"done"}}) opts))))
        (catch Throwable e
          (println e)
          (send o (response-for msg {"completions" []
-                                    "status" #{"done"}})))))
+                                    "status" #{"done"}}) opts))))
 
-(defn close-session [ctx msg _is os]
+(defn close-session [ctx msg _is os opts]
   (let [session (:session msg)]
     (swap! (:sessions ctx) disj session))
-  (send os (response-for msg {"status" #{"done" "session-closed"}})))
+  (send os (response-for msg {"status" #{"done" "session-closed"}}) opts))
 
-(defn ls-sessions [ctx msg os]
+(defn ls-sessions [ctx msg os opts]
   (let [sessions @(:sessions ctx)]
     (send os (response-for msg {"sessions" sessions
-                                "status" #{"done"}}))))
+                                "status" #{"done"}}) opts)))
 
 (defn read-msg [msg]
   (-> (zipmap (map keyword (keys msg))
@@ -119,78 +119,74 @@
                       %) (vals msg)))
       (update :op keyword)))
 
-(defn session-loop [ctx ^InputStream is os id]
-  (when @dev? (println "Reading!" id (.available is)))
+(defn session-loop [ctx ^InputStream is os id {:keys [quiet debug] :as opts}]
+  (when debug (println "Reading!" id (.available is)))
   (when-let [msg (try (read-bencode is)
                       (catch EOFException _
-                        (println "Client closed connection.")))]
+                        (when-not quiet
+                          (println "Client closed connection."))))]
     (let [msg (read-msg msg)]
-      (when @dev? (prn "Received" msg))
+      (when debug (prn "Received" msg))
       (case (get msg :op)
         :clone (do
-                 (when @dev? (println "Cloning!"))
+                 (when debug (println "Cloning!"))
                  (let [id (str (java.util.UUID/randomUUID))]
                    (swap! (:sessions ctx) (fnil conj #{}) id)
-                   (send os (response-for msg {"new-session" id "status" #{"done"}}))
-                   (recur ctx is os id)))
-        :close (do (close-session ctx msg is os)
-                   (recur ctx is os id))
+                   (send os (response-for msg {"new-session" id "status" #{"done"}}) opts)
+                   (recur ctx is os id opts)))
+        :close (do (close-session ctx msg is os opts)
+                   (recur ctx is os id opts))
         :eval (do
-                (eval-msg ctx os msg)
-                (recur ctx is os id))
+                (eval-msg ctx os msg opts)
+                (recur ctx is os id opts))
         :load-file (let [file (:file msg)
                          msg (assoc msg :code file)]
-                     (eval-msg ctx os msg)
-                     (recur ctx is os id))
+                     (eval-msg ctx os msg opts)
+                     (recur ctx is os id opts))
         :complete (do
-                    (complete ctx os msg)
-                    (recur ctx is os id))
+                    (complete ctx os msg opts)
+                    (recur ctx is os id opts))
         :describe
         (do (send os (response-for msg {"status" #{"done"}
                                         "ops" (zipmap #{"clone" "close" "eval" "load-file"
                                                         "complete" "describe" "ls-sessions"}
-                                                      (repeat {}))}))
-            (recur ctx is os id))
-        :ls-sessions (do (ls-sessions ctx msg os)
-                         (recur ctx is os id))
+                                                      (repeat {}))}) opts)
+            (recur ctx is os id opts))
+        :ls-sessions (do (ls-sessions ctx msg os opts)
+                         (recur ctx is os id opts))
         ;; fallback
-        (do (when @dev?
+        (do (when debug
               (println "Unhandled message" msg))
-            (send os (response-for msg {"status" #{"error" "unknown-op" "done"}}))
-            (recur ctx is os id))))))
+            (send os (response-for msg {"status" #{"error" "unknown-op" "done"}}) opts)
+            (recur ctx is os id opts))))))
 
-(defn listen [ctx ^ServerSocket listener]
-  (when @dev? (println "Listening"))
+(defn listen [ctx ^ServerSocket listener {:keys [debug] :as opts}]
+  (when debug (println "Listening"))
   (let [client-socket (.accept listener)
         in (.getInputStream client-socket)
         in (PushbackInputStream. in)
         out (.getOutputStream client-socket)
         out (BufferedOutputStream. out)]
-    (when @dev? (println "Connected."))
+    (when debug (println "Connected."))
     (sci/future
       (sci/binding
           ;; allow *ns* to be set! inside future
           [vars/current-ns (vars/->SciNamespace 'user nil)
            sci/print-length @sci/print-length]
-        (session-loop ctx in out "pre-init")))
-    (recur ctx listener)))
+        (session-loop ctx in out "pre-init" opts)))
+    (recur ctx listener opts)))
 
-(def server (atom nil))
+(defn stop-server! [{:keys [socket]}]
+  (.close ^ServerSocket socket))
 
-(defn stop-server! []
-  (when-let [s @server]
-    (.close ^ServerSocket s)
-    (reset! server nil)))
-
-(defn start-server! [ctx {:keys [address port debug]
-                          :or {address "0.0.0.0"}}]
-  (vreset! dev? debug)
+(defn start-server! [ctx & [{:keys [address port quiet]
+                             :or {address "0.0.0.0"}
+                             :as opts}]]
   (let [ctx (assoc ctx :sessions (atom #{}))
         address (java.net.InetAddress/getByName address)
         socket-server (new ServerSocket port 0 address)]
-    (println (format "Started nREPL server at %s:%d" (.getHostAddress address) port))
-    (reset! server socket-server)
-    (try
-      (listen ctx socket-server)
-      (finally
-        (reset! server nil)))))
+    (when-not quiet
+      (println (format "Started nREPL server at %s:%d" (.getHostAddress address) port)))
+    {:socket socket-server
+     :process (future
+                (listen ctx socket-server opts))}))
