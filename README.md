@@ -1,6 +1,6 @@
 # babashka.nrepl
 
-The nrepl server from babashka as a library, so it can be used from
+The nREPL server from babashka as a library, so it can be used from
 other sci-based CLIs.
 
 Sci is available here: https://github.com/borkdude/sci
@@ -12,7 +12,7 @@ server call `babashka.nrepl.server/stop-server!`
 
 ### Starting a Server
 
-To start an nrepl server in your project, call
+To start an nREPL server in your project, call
 `babashka.nrepl.server/start-server!`. The call takes two arguments, your
 initial sci context (as created with `sci.core/init`), and some options
 including the IP address to bind to, the port number and optional debug and
@@ -23,13 +23,13 @@ quiet flags. eg:
 ;; Started nREPL server at 127.0.0.1:23456
 ```
 
-If `:debug` is set to `true`, the nrepl server will print to stdout
-all the messages it is receiving over the nrepl channel.
+If `:debug` is set to `true`, the nREPL server will print to stdout
+all the messages it is receiving over the nREPL channel.
 
 If `:debug-send` is set to `true`, the server will also print the
 messages it is sending.
 
-if `:quiet` is set to `true`, the nrepl server will not print out the message
+if `:quiet` is set to `true`, the nREPL server will not print out the message
 "starting nREPL server at...". If not specified then `:quiet` defaults to
 `false`, and the message will be printed.
 
@@ -38,7 +38,7 @@ If `:port` is not specified, it defaults to `1667`.
 If `:host` is not specified, it defaults to `0.0.0.0` (bind to every interface).
 
 If no options hashmap is specified at all, all the defaults will be used. Thus
-the following is a valid way to launch an nrepl server.
+the following is a valid way to launch an nREPL server.
 
 ```clojure
 (babashka.nrepl.server/start-server! sci-ctx)
@@ -58,9 +58,9 @@ Started nREPL server at 0.0.0.0:1667
 nil
 ```
 
-### Parsing an nREPL options String
+### Parsing an nREPL options string
 
-Use `babashka.nrepl.server/parse-opt` like:
+Use `babashka.nrepl.server/parse-opt` to parse strings like:
 
 ```clojure
 (babashka.nrepl.server/parse-opt "localhost:1667")
@@ -83,14 +83,13 @@ You can pass the return value of `parse-opt` to `start-server!`:
 
 Often you will want to launch the server and then block execution until the
 server is shutdown (at which point the code will continue executing), or ctrl-C
-is pressed (at which point the proess will exit). This can be easily achieved by
-derefing the returned `:future` value:
+is pressed (at which point the process will exit). This can be achieved as
+follows:
 
 ```clojure
-(-> (babashka.nrepl.server/start-server! sci-ctx {:host "127.0.0.1"
-                                             :port 1667})
-    :future
-    deref)
+(babashka.nrepl.server/start-server! sci-ctx {:host "127.0.0.1"
+                                              :port 1667})
+@(promise)
 ```
 
 #### Complaints about resolving symbols in the nREPL
