@@ -12,15 +12,15 @@ server call `babashka.nrepl.server/stop-server!`
 
 ### Starting a Server
 
-To start an nrepl in your project, call
+To start an nrepl server in your project, call
 `babashka.nrepl.server/start-server!`. The call takes two arguments, your
-initial sci context, and some options including the IP address to bind
-to, the port number and optional debug and quiet flags. eg:
+initial sci context (as created with `sci.core/init`), and some options
+including the IP address to bind to, the port number and optional debug and
+quiet flags. eg:
 
 ```clojure
 (babashka.nrepl.server/start-server! sci-ctx {:host "127.0.0.1" :port 23456})
-;; => {:socket #object[java.net.ServerSocket 0x4ad88197 "ServerSocket[addr=/127.0.0.1,localport=23456]"],
-;;     :future #object[clojure.core$future_call$reify__8459 0x68a8273f {:status :pending, :val nil}]}
+;; Started nREPL server at 127.0.0.1:23456
 ```
 
 If `:debug` is set to `true`, the nrepl server will print to stdout
@@ -29,39 +29,36 @@ all the messages it is receiving over the nrepl channel.
 If `:debug-send` is set to `true`, the server will also print the
 messages it is sending.
 
-if `:quiet` is set to `true`, the nrepl server will not print out the
-message "starting nREPL server at...". If not specified then the
-default `quiet` is false, and the message will be printed.
+if `:quiet` is set to `true`, the nrepl server will not print out the message
+"starting nREPL server at...". If not specified then `:quiet` defaults to
+`false`, and the message will be printed.
 
-If `:port` is not specified, the default babashka port of 1667 is
-used.
+If `:port` is not specified, it defaults to `1667`.
 
-If `:host` is not specified, a default of `0.0.0.0` is used (bind
-to every interface).
+If `:host` is not specified, it defaults to `0.0.0.0` (bind to every interface).
 
-If no options hashmap is specified at all, all the defaults will be
-used. Thus the following is a valid way to launch an nrepl server.
+If no options hashmap is specified at all, all the defaults will be used. Thus
+the following is a valid way to launch an nrepl server.
 
 ```clojure
 (babashka.nrepl.server/start-server! sci-ctx)
 ;; Started nREPL server at 0.0.0.0:1667
-;; => {:socket #object[java.net.ServerSocket 0x68867145 "ServerSocket[addr=/0.0.0.0,localport=1667]"],
-;;     :future #object[clojure.core$future_call$reify__8459 0x3061657 {:status :pending, :val nil}]}
-
 ```
 
 ### Stopping a Server
 
-Pass the hashmap you received from `start-server!` to `stop-server!`
-to close the server port and shut down the server.
+Pass the result you received from `start-server!` to `stop-server!` to shut down
+the server.
 
 ```clojure
-(babashka.nrepl.server/stop-server! (babashka.nrepl.server/start-server! {}))
+(->
+  (babashka.nrepl.server/start-server! sci-ctx)
+  (babashka.nrepl.server/stop-server!))
 Started nREPL server at 0.0.0.0:1667
 nil
 ```
 
-### Parsing an nREPL Options String
+### Parsing an nREPL options String
 
 Use `babashka.nrepl.server/parse-opt` like:
 
@@ -72,7 +69,7 @@ Use `babashka.nrepl.server/parse-opt` like:
 ;;=> {:host nil, :port 1667}
 ```
 
-So you can pass an option string straight in:
+You can pass the return value of `parse-opt` to `start-server!`:
 
 ```clojure
 (babashka.nrepl.server/start-server!
@@ -84,11 +81,10 @@ So you can pass an option string straight in:
 
 #### Blocking after launching
 
-Often you will want to launch the server and then block execution
-until the server is shutdown (at which point the code will continue
-executing), or ctrl-C is pressed (at which point the proess will
-exit). This can be easily achieved by derefing the returned `:future`
-value:
+Often you will want to launch the server and then block execution until the
+server is shutdown (at which point the code will continue executing), or ctrl-C
+is pressed (at which point the proess will exit). This can be easily achieved by
+derefing the returned `:future` value:
 
 ```clojure
 (-> (babashka.nrepl.server/start-server! sci-ctx {:host "127.0.0.1"
@@ -99,7 +95,7 @@ value:
 
 #### Complaints about resolving symbols in the nREPL
 
-When connecting to the nREPL you may recieve errors like:
+When connecting to the nREPL you may receive errors like:
 
 ```
 ;; nREPL:
@@ -163,7 +159,10 @@ value:
 
 ## Authors
 
-The main body of work was done by Michiel Borkent (@borkdude). Addition rework and some added functionality was done by Crispin Wellington (@retrogradeorbit).
+The main body of work was done by Michiel Borkent
+([@borkdude](https://github.com/borkdude)). Addition rework and some added
+functionality was done by Crispin Wellington
+([@retrogradeorbit](https://github.com/retrogradeorbit)).
 
 ## License
 
