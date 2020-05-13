@@ -1,4 +1,4 @@
-(ns sci-nrepl.test-utils
+(ns babashka.nrepl.test-utils
   {:author "Michiel Borkent"}
   (:require [clojure.java.io :as io])
   (:import [java.net Socket ConnectException]))

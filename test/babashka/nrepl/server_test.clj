@@ -1,8 +1,8 @@
-(ns sci-nrepl.server-test
+(ns babashka.nrepl.server-test
   {:author "Michiel Borkent"}
   (:require [bencode.core :as bencode]
-            [sci-nrepl.server :as server]
-            [sci-nrepl.test-utils :as test-utils]
+            [babashka.nrepl.server :as server]
+            [babashka.nrepl.test-utils :as test-utils]
             [clojure.test :as t :refer [deftest is testing]]
             [sci.impl.opts :refer [init]])
   (:import [java.net Socket]))
