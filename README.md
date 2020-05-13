@@ -12,19 +12,32 @@ server call `babashka.nrepl.server/stop-server!`
 
 ### Starting a Server
 
+Before you start a server you will need to create a sci context:
+
+```clojure
+(require '[sci.core :as sci])
+(require '[sci.addons :as addons])
+
+(def opts (-> {:namespaces {'foo.bar {'x 1}}} addons/future))
+(def sci-ctx (sci/init opts))
+```
+
+A sci context is derived from options as documented in `sci.core/eval-string`
+and contains the runtime state of a sci session. This context is re-used over
+successive REPL invocations.
+
 To start an nREPL server in your project, call
 `babashka.nrepl.server/start-server!`. The call takes two arguments, your
-initial sci context (as created with `sci.core/init`), and some options
-including the IP address to bind to, the port number and optional debug and
-quiet flags. eg:
+initial sci context and some options including the IP address to bind to, the
+port number and optional debug and quiet flags. E.g.:
 
 ```clojure
 (babashka.nrepl.server/start-server! sci-ctx {:host "127.0.0.1" :port 23456})
 ;; Started nREPL server at 127.0.0.1:23456
 ```
 
-If `:debug` is set to `true`, the nREPL server will print to stdout
-all the messages it is receiving over the nREPL channel.
+If `:debug` is set to `true`, the nREPL server will print to stdout all the
+messages it is receiving over the nREPL channel.
 
 If `:debug-send` is set to `true`, the server will also print the
 messages it is sending.
@@ -92,50 +105,9 @@ follows:
 @(promise)
 ```
 
-#### Complaints about resolving symbols in the nREPL
-
-When connecting to the nREPL you may receive errors like:
-
-```
-;; nREPL:
-clojure.lang.ExceptionInfo: Could not resolve symbol: clojure.core/apply [at line 1, column 2]
-```
-
-You may also find a missing default namespace or core clojure
-functionality missing.
-
-```clojure
-;; nREPL:
-nil> (inc 1)
-clojure.lang.ExceptionInfo: Could not resolve symbol: inc [at line 1, column 2]
-```
-
-This is caused by an incomplete sci context var. Unlike
-`sci.core/eval-string`, the nREPL server does not do any further
-initialisation of the sci context, like bolting in default clojure
-bindings. It serves exactly the sci context you give it. And so, often
-a little extra initialisation is helpful by using `sci.core/init`
-to flesh out the sci context var.
-
-```clojure
-(babashka.nrepl.server/start-server!
-    (sci.core/init sci-ctx)
-    {:host "127.0.0.1"
-     :port 1667})
-```
-
-You may also wish to add on futures support. For example:
-
-```clojure
-(-> sci-ctx
-    sci.addons/future
-    sci.core/init
-    babashka.nrepl.server/start-server!)
-```
-
 #### Complaints about clojure.main/repl-requires
 
-Connecting to the nREPL from cider gives:
+Connecting to the nREPL from CIDER gives:
 
 ```
 ;; nREPL:
