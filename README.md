@@ -104,12 +104,12 @@ This is caused by an incomplete sci context var. Unlike
 `sci.core/eval-string`, the nREPL server does not do any further
 initialisation of the sci context, like bolting in default clojure
 bindings. It serves exactly the sci context you give it. And so, often
-a little extra initialisation is helpful by using `sci.impl.opts/init`
+a little extra initialisation is helpful by using `sci.core/init`
 to flesh out the sci context var.
 
 ```clojure
 (sci-nrepl.server/start-server!
-    (sci.impl.opts/init sci-ctx)
+    (sci.core/init sci-ctx)
     {:address "127.0.0.1"
      :port 1667})
 ```
@@ -119,7 +119,7 @@ You may also wish to add on futures support. For example:
 ```clojure
 (-> sci-ctx
     sci.addons/future
-    sci.impl.opts/init
+    sci.core/init
     sci-nrepl.server/start-server!)
 ```
 
@@ -142,7 +142,7 @@ value:
     (assoc-in [:namespaces 'clojure.main 'repl-requires]
         '[[clojure.repl :refer [dir doc]]])
     sci.addons/future
-    sci.impl.opts/init
+    sci.core/init
     sci-nrepl.server/start-server!)
 ```
 
