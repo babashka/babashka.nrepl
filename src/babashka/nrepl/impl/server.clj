@@ -1,8 +1,8 @@
 (ns babashka.nrepl.impl.server
   {:author "Michiel Borkent"
    :no-doc true}
-  (:require [bencode.core :refer [read-bencode]]
-            [babashka.nrepl.impl.utils :as utils]
+  (:require [babashka.nrepl.impl.utils :as utils]
+            [bencode.core :refer [read-bencode]]
             [clojure.string :as string]
             [clojure.tools.reader.reader-types :as r]
             [sci.core :as sci]

@@ -1,8 +1,8 @@
 (ns babashka.nrepl.server-test
   {:author "Michiel Borkent"}
-  (:require [bencode.core :as bencode]
-            [babashka.nrepl.server :as server]
+  (:require [babashka.nrepl.server :as server]
             [babashka.nrepl.test-utils :as test-utils]
+            [bencode.core :as bencode]
             [clojure.test :as t :refer [deftest is testing]]
             [sci.impl.opts :refer [init]])
   (:import [java.net Socket]))
@@ -190,15 +190,19 @@
               (server/start-server!
                (init {:namespaces namespaces
                       :features #{:bb}})
-               {:address "0.0.0.0"
+               {:host "0.0.0.0"
                 :port nrepl-test-port
                 :debug false
-                :debug-send false
-                }))
+                :debug-send false}))
       (test-utils/wait-for-port "localhost" nrepl-test-port)
       (nrepl-test nrepl-test-port)
       (finally
         (server/stop-server! @service)))))
+
+(deftest parse-opt-test
+  (is (= 1668 (:port (server/parse-opt "1668"))))
+  (is (= 1668 (:port (server/parse-opt "localhost:1668"))))
+  (is (= "localhost" (:host (server/parse-opt "localhost:1668")))))
 
 ;;;; Scratch
 
