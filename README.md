@@ -1,4 +1,4 @@
-# sci-nrepl
+# babashka.nrepl
 
 The nrepl server from babashka as a library, so it can be used from
 other sci-based CLIs.
