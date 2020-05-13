@@ -1,7 +1,7 @@
 # sci-nrepl
 
-A Clojure library designed to facilitate adding nrepl support to your
-clojure projects that use the small clojure interpreter, sci.
+The nrepl server from babashka as a library, so it can be used from
+other sci-based CLIs.
 
 Sci is available here: https://github.com/borkdude/sci
 
@@ -141,6 +141,10 @@ value:
     sci.core/init
     sci-nrepl.server/start-server!)
 ```
+
+## Authors
+
+The main body of work was done by Michiel Borkent (@borkdude). Addition rework and some added functionality was done by Crispin Wellington (@retrogradeorbit).
 
 ## License
 
