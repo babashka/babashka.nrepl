@@ -1,4 +1,4 @@
-(defproject babashka.nrepl "0.1.0-SNAPSHOT"
+(defproject babashka/babashka.nrepl "0.0.1-SNAPSHOT"
   :description "babashka nREPL module"
   :url "http://example.com/FIXME"
   :license {:name "EPL-1.0"
@@ -6,4 +6,8 @@
   :dependencies [[org.clojure/clojure "1.10.2-alpha1"]
                  [nrepl/bencode "1.1.0"]
                  [borkdude/edamame "0.0.11-alpha.9"]
-                 [borkdude/sci "0.0.13-alpha.20"]])
+                 [borkdude/sci "0.0.13-alpha.20"]]
+  :deploy-repositories [["clojars" {:url "https://clojars.org/repo"
+                                    :username :env/babashka_nrepl_clojars_user
+                                    :password :env/babashka_nrepl_clojars_pass
+                                    :sign-releases false}]])
