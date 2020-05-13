@@ -7,18 +7,18 @@ Sci is available here: https://github.com/borkdude/sci
 
 ## Usage
 
-To start a server, call `sci-nrepl.server/start-server!`. To stop a
-server call `sci-nrepl.server/stop-server!`
+To start a server, call `babashka.nrepl.server/start-server!`. To stop a
+server call `babashka.nrepl.server/stop-server!`
 
 ### Starting a Server
 
 To start an nrepl in your project, call
-`sci-nrepl.server/start-server!`. The call takes two arguments, your
+`babashka.nrepl.server/start-server!`. The call takes two arguments, your
 initial sci context, and some options including the IP address to bind
 to, the port number and optional debug and quiet flags. eg:
 
 ```clojure
-(sci-nrepl.server/start-server! sci-ctx {:address "127.0.0.1" :port 23456})
+(babashka.nrepl.server/start-server! sci-ctx {:host "127.0.0.1" :port 23456})
 ;; => {:socket #object[java.net.ServerSocket 0x4ad88197 "ServerSocket[addr=/127.0.0.1,localport=23456]"],
 ;;     :future #object[clojure.core$future_call$reify__8459 0x68a8273f {:status :pending, :val nil}]}
 ```
@@ -36,14 +36,14 @@ default `quiet` is false, and the message will be printed.
 If `:port` is not specified, the default babashka port of 1667 is
 used.
 
-If `:address` is not specified, a default of `0.0.0.0` is used (bind
+If `:host` is not specified, a default of `0.0.0.0` is used (bind
 to every interface).
 
 If no options hashmap is specified at all, all the defaults will be
 used. Thus the following is a valid way to launch an nrepl server.
 
 ```clojure
-(sci-nrepl.server/start-server! sci-ctx)
+(babashka.nrepl.server/start-server! sci-ctx)
 ;; Started nREPL server at 0.0.0.0:1667
 ;; => {:socket #object[java.net.ServerSocket 0x68867145 "ServerSocket[addr=/0.0.0.0,localport=1667]"],
 ;;     :future #object[clojure.core$future_call$reify__8459 0x3061657 {:status :pending, :val nil}]}
@@ -56,9 +56,28 @@ Pass the hashmap you received from `start-server!` to `stop-server!`
 to close the server port and shut down the server.
 
 ```clojure
-(sci-nrepl.server/stop-server! (sci-nrepl.server/start-server! {}))
+(babashka.nrepl.server/stop-server! (babashka.nrepl.server/start-server! {}))
 Started nREPL server at 0.0.0.0:1667
 nil
+```
+
+### Parsing an nREPL Options String
+
+Use `babashka.nrepl.server/parse-opt` like:
+
+```clojure
+(babashka.nrepl.server/parse-opt "localhost:1667")
+;;=> {:host "localhost", :port 1667}
+(babashka.nrepl.server/parse-opt "1667")
+;;=> {:host nil, :port 1667}
+```
+
+So you can pass an option string straight in:
+
+```clojure
+(babashka.nrepl.server/start-server!
+    sci-ctx
+    (babashka.nrepl.server/parse-opt "localhost:23456"))
 ```
 
 ### Tips and Tricks
@@ -72,7 +91,7 @@ exit). This can be easily achieved by derefing the returned `:future`
 value:
 
 ```clojure
-(-> (sci-nrepl.server/start-server! sci-ctx {:address "127.0.0.1"
+(-> (babashka.nrepl.server/start-server! sci-ctx {:host "127.0.0.1"
                                              :port 1667})
     :future
     deref)
@@ -104,9 +123,9 @@ a little extra initialisation is helpful by using `sci.core/init`
 to flesh out the sci context var.
 
 ```clojure
-(sci-nrepl.server/start-server!
+(babashka.nrepl.server/start-server!
     (sci.core/init sci-ctx)
-    {:address "127.0.0.1"
+    {:host "127.0.0.1"
      :port 1667})
 ```
 
@@ -116,7 +135,7 @@ You may also wish to add on futures support. For example:
 (-> sci-ctx
     sci.addons/future
     sci.core/init
-    sci-nrepl.server/start-server!)
+    babashka.nrepl.server/start-server!)
 ```
 
 #### Complaints about clojure.main/repl-requires
@@ -139,7 +158,7 @@ value:
         '[[clojure.repl :refer [dir doc]]])
     sci.addons/future
     sci.core/init
-    sci-nrepl.server/start-server!)
+    babashka.nrepl.server/start-server!)
 ```
 
 ## Authors
