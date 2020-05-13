@@ -7,4 +7,3 @@
                  [nrepl/bencode "1.1.0"]
                  [borkdude/edamame "0.0.11-alpha.9"]
                  [borkdude/sci "0.0.13-alpha.19"]]
-  :repl-options {:init-ns sci-nrepl.core})
