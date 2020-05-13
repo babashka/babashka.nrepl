@@ -1,6 +1,8 @@
-(defproject babashka/babashka.nrepl "0.0.1-SNAPSHOT"
+(defproject babashka/babashka.nrepl "0.0.1"
   :description "babashka nREPL module"
-  :url "http://example.com/FIXME"
+  :url "https://github.com/babashka/babashka.nrepl"
+  :scm {:name "git"
+        :url "https://github.com/babashka/babashka.nrepl"}
   :license {:name "EPL-1.0"
             :url "https://www.eclipse.org/legal/epl-1.0/"}
   :dependencies [[org.clojure/clojure "1.10.2-alpha1"]
