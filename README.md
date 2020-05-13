@@ -50,10 +50,6 @@ used. Thus the following is a valid way to launch an nrepl server.
 
 ```
 
-The `start-server!` call returns a hashmap with two keys. `:socket`
-holds the java Socket object that is bound and listening. And
-`:future` holds the future which contains the running server.
-
 ### Stopping a Server
 
 Pass the hashmap you received from `start-server!` to `stop-server!`
