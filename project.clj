@@ -1,5 +1,5 @@
-(defproject sci-nrepl "0.1.0-SNAPSHOT"
-  :description "sci nREPL module"
+(defproject babashka.nrepl "0.1.0-SNAPSHOT"
+  :description "babashka nREPL module"
   :url "http://example.com/FIXME"
   :license {:name "EPL-1.0"
             :url "https://www.eclipse.org/legal/epl-1.0/"}

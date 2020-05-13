@@ -1,6 +1,6 @@
-(ns sci-nrepl.server
+(ns babashka.nrepl.server
   {:author "Michiel Borkent"}
-  (:require [sci-nrepl.impl.server :as server])
+  (:require [babashka.nrepl.impl.server :as server])
   (:import [java.net ServerSocket]))
 
 (set! *warn-on-reflection* true)

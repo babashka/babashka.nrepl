@@ -1,4 +1,4 @@
-(ns sci-nrepl.impl.utils
+(ns babashka.nrepl.impl.utils
   {:author "Michiel Borkent"
    :no-doc true}
   (:refer-clojure :exclude [send])
