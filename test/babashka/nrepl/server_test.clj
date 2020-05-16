@@ -4,23 +4,25 @@
             [babashka.nrepl.test-utils :as test-utils]
             [bencode.core :as bencode]
             [clojure.test :as t :refer [deftest is testing]]
-            [sci.impl.opts :refer [init]])
+            [sci.core :as sci])
   (:import [java.net Socket]))
 
 (def debug? false)
 
 (set! *warn-on-reflection* true)
 
-;; test on a non standard port to minimise repl interference
+;; Test on a non standard port to minimize REPL interference
 (def nrepl-test-port 54345)
+
+(def dynvar (sci/new-dynamic-var '*x* 10))
 
 (def namespaces
   ;; fake namespaces for symbol completion tests
-  {
-   'cheshire.core {'generate-string 'foo
+  {'cheshire.core {'generate-string 'foo
                    'somethingelse 'bar}
    'clojure.test {'deftest 'foo
-                  'somethingelse 'bar}})
+                  'somethingelse 'bar
+                  '*x* dynvar}})
 
 (defn bytes->str [x]
   (if (bytes? x) (String. (bytes x))
@@ -70,6 +72,12 @@
               value (:value msg)]
           (is (= 1 id))
           (is (= value "6")))
+        (bencode/write-bencode os {"op" "eval"
+                                   "code" "(do (require '[clojure.test :refer [*x*]]) *x*)"
+                                   "session" session "id" (new-id!)})
+        (let [msg (read-reply in session @id)
+              value (:value msg)]
+          (is (= value "11")))
         (testing "creating a namespace and evaluating something in it"
           (bencode/write-bencode os {"op" "eval"
                                      "code" "(ns ns0) (defn foo [] :foo0) (ns ns1) (defn foo [] :foo1)"
@@ -185,19 +193,20 @@
 
 (deftest nrepl-server-test
   (let [service (atom nil)]
-    (try
-      (reset! service
-              (server/start-server!
-               (init {:namespaces namespaces
-                      :features #{:bb}})
-               {:host "0.0.0.0"
-                :port nrepl-test-port
-                :debug false
-                :debug-send false}))
-      (test-utils/wait-for-port "localhost" nrepl-test-port)
-      (nrepl-test nrepl-test-port)
-      (finally
-        (server/stop-server! @service)))))
+    (sci/binding [dynvar 11]
+      (try
+        (reset! service
+                (server/start-server!
+                 (sci/init {:namespaces namespaces
+                            :features #{:bb}})
+                 {:host "0.0.0.0"
+                  :port nrepl-test-port
+                  :debug false
+                  :debug-send false}))
+        (test-utils/wait-for-port "localhost" nrepl-test-port)
+        (nrepl-test nrepl-test-port)
+        (finally
+          (server/stop-server! @service))))))
 
 (deftest parse-opt-test
   (is (= 1668 (:port (server/parse-opt "1668"))))

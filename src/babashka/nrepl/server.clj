@@ -1,7 +1,8 @@
 (ns babashka.nrepl.server
   {:author "Michiel Borkent"}
   (:require [babashka.nrepl.impl.server :as server]
-            [clojure.string :as string])
+            [clojure.string :as string]
+            [sci.core :as sci])
   (:import [java.net ServerSocket]))
 
 (set! *warn-on-reflection* true)
@@ -31,5 +32,5 @@
     (when-not quiet
       (println (format "Started nREPL server at %s:%d" (.getHostAddress inet-address) port)))
     {:socket socket-server
-     :future (future
+     :future (sci/future
                (server/listen ctx socket-server opts))}))
