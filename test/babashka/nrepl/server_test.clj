@@ -189,7 +189,25 @@
                                    "session" session "id" (new-id!)})
         (dotimes [_ 3]
           (let [reply (read-reply in session @id)]
-            (is (= "Hello\n" (:out reply)))))))))
+            (is (= "Hello\n" (:out reply))))))
+      (testing "output flushing"
+        (bencode/write-bencode os {"op" "eval" "code" "(print \"short\")"
+                                   "session" session "id" (new-id!)})
+        (is (= "short" (:out (read-reply in session @id)))))
+      (testing "output not truncating"
+        (let [large-block
+              (apply str
+                     (repeatedly 5000  ;; bigger than the 1024 buffer size
+                                 #(rand-nth
+                                   (seq "abcdefghijklmnopqrstuvwxyz ☂☀\t "))))]
+          (bencode/write-bencode os {"op" "eval" "code" (format "(print \"%s\")" large-block)
+                                     "session" session "id" (new-id!)})
+          (is (= large-block
+                 (loop [output ""]
+                   (let [{:keys [status out]} (read-reply in session @id)]
+                     (if (= status ["done"])
+                       output
+                       (recur (str output out))))))))))))
 
 (deftest nrepl-server-test
   (let [service (atom nil)]
