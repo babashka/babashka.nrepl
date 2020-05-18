@@ -1,4 +1,4 @@
-(defproject babashka/babashka.nrepl "0.0.3-SNAPSHOT"
+(defproject babashka/babashka.nrepl "0.0.3"
   :description "babashka nREPL module"
   :url "https://github.com/babashka/babashka.nrepl"
   :scm {:name "git"
