@@ -28,8 +28,10 @@
           (let [pw (utils/replying-print-writer o msg opts)
                 form (p/parse-next ctx reader)
                 value (if (identical? :edamame.impl.parser/eof form) ::nil
-                          (sci/with-bindings {sci/out pw}
-                            (eval-form ctx form)))
+                          (let [result (sci/with-bindings {sci/out pw}
+                                         (eval-form ctx form))]
+                            (.flush pw)
+                            result))
                 env (:env ctx)]
             (swap! env update-in [:namespaces 'clojure.core]
                    (fn [core]
