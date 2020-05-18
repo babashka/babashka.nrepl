@@ -191,9 +191,9 @@
           (let [reply (read-reply in session @id)]
             (is (= "Hello\n" (:out reply))))))
       (testing "output flushing"
-        (bencode/write-bencode os {"op" "eval" "code" "(print \"short\")"
+        (bencode/write-bencode os {"op" "eval" "code" "(print \"short no newline\")"
                                    "session" session "id" (new-id!)})
-        (is (= "short" (:out (read-reply in session @id)))))
+        (is (= "short no newline" (:out (read-reply in session @id)))))
       (testing "output not truncating"
         (let [large-block
               (apply str
