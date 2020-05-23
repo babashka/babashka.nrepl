@@ -4,6 +4,7 @@
   (:require [babashka.nrepl.impl.utils :as utils]
             [bencode.core :refer [read-bencode]]
             [clojure.string :as string]
+            [clojure.string :as str]
             [clojure.tools.reader.reader-types :as r]
             [sci.core :as sci]
             [sci.impl.interpreter :refer [eval-string* eval-form]]
@@ -72,42 +73,44 @@
           sci-ns (when ns-str
                    (sci-utils/namespace-object (:env ctx) (symbol ns-str) nil false))]
       (sci/binding [vars/current-ns (or sci-ns @vars/current-ns)]
-        (let [query (:symbol msg)
-              has-namespace? (.contains ^String query "/")
-              from-current-ns (fully-qualified-syms ctx (eval-string* ctx "(ns-name *ns*)"))
-              from-current-ns (map (fn [sym]
-                                     [(namespace sym) (name sym) :unqualified])
-                                   from-current-ns)
-              alias->ns (eval-string* ctx "(let [m (ns-aliases *ns*)] (zipmap (keys m) (map ns-name (vals m))))")
-              ns->alias (zipmap (vals alias->ns) (keys alias->ns))
-              from-aliased-nss (doall (mapcat
-                                       (fn [alias]
-                                         (let [ns (get alias->ns alias)
-                                               syms (eval-string* ctx (format "(keys (ns-publics '%s))" ns))]
-                                           (map (fn [sym]
-                                                  [(str ns) (str sym) :qualified])
-                                                syms)))
-                                       (keys alias->ns)))
-              all-namespaces (->> (eval-string* ctx (format "(all-ns)"))
-                                  (map (fn [sym]
-                                         [(str (.-name ^sci.impl.vars.SciNamespace sym)) nil :qualified])))
-              fully-qualified-names (when has-namespace?
-                                      (let [fqns (symbol (first (string/split query #"/")))
-                                            ns (get alias->ns fqns fqns)
-                                            syms (eval-string* ctx (format "(keys (ns-publics '%s))" ns))]
-                                        (map (fn [sym]
-                                               [(str ns) (str sym) :qualified])
-                                             syms)))
-              svs (concat from-current-ns from-aliased-nss all-namespaces fully-qualified-names)
-              completions (keep (fn [entry]
-                                  (match alias->ns ns->alias query entry))
-                                svs)
-              completions (mapv (fn [[namespace name]]
-                                  {"candidate" (str name) "ns" (str namespace) #_"type" #_"function"})
-                                completions)]
-          (when debug (prn "completions" completions))
-          (utils/send o (utils/response-for msg {"completions" completions
-                                                 "status" #{"done"}}) opts))))
+        (if-let [query (or (:symbol msg)
+                           (:prefix msg))]
+          (let [has-namespace? (str/includes? query "/")
+                from-current-ns (fully-qualified-syms ctx (eval-string* ctx "(ns-name *ns*)"))
+                from-current-ns (map (fn [sym]
+                                       [(namespace sym) (name sym) :unqualified])
+                                     from-current-ns)
+                alias->ns (eval-string* ctx "(let [m (ns-aliases *ns*)] (zipmap (keys m) (map ns-name (vals m))))")
+                ns->alias (zipmap (vals alias->ns) (keys alias->ns))
+                from-aliased-nss (doall (mapcat
+                                         (fn [alias]
+                                           (let [ns (get alias->ns alias)
+                                                 syms (eval-string* ctx (format "(keys (ns-publics '%s))" ns))]
+                                             (map (fn [sym]
+                                                    [(str ns) (str sym) :qualified])
+                                                  syms)))
+                                         (keys alias->ns)))
+                all-namespaces (->> (eval-string* ctx (format "(all-ns)"))
+                                    (map (fn [sym]
+                                           [(str (.-name ^sci.impl.vars.SciNamespace sym)) nil :qualified])))
+                fully-qualified-names (when has-namespace?
+                                        (let [fqns (symbol (first (string/split query #"/")))
+                                              ns (get alias->ns fqns fqns)
+                                              syms (eval-string* ctx (format "(keys (ns-publics '%s))" ns))]
+                                          (map (fn [sym]
+                                                 [(str ns) (str sym) :qualified])
+                                               syms)))
+                svs (concat from-current-ns from-aliased-nss all-namespaces fully-qualified-names)
+                completions (keep (fn [entry]
+                                    (match alias->ns ns->alias query entry))
+                                  svs)
+                completions (mapv (fn [[namespace name]]
+                                    {"candidate" (str name) "ns" (str namespace) #_"type" #_"function"})
+                                  completions)]
+            (when debug (prn "completions" completions))
+            (utils/send o (utils/response-for msg {"completions" completions
+                                                   "status" #{"done"}}) opts))
+          (utils/send o (utils/response-for msg {"status" #{"done"}}) opts))))
     (catch Throwable e
       (println e)
       (utils/send o (utils/response-for msg {"completions" []
