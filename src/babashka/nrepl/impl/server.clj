@@ -3,7 +3,6 @@
    :no-doc true}
   (:require [babashka.nrepl.impl.utils :as utils]
             [bencode.core :refer [read-bencode]]
-            [clojure.string :as string]
             [clojure.string :as str]
             [clojure.tools.reader.reader-types :as r]
             [sci.core :as sci]
@@ -53,7 +52,7 @@
 (defn fully-qualified-syms [ctx ns-sym]
   (let [syms (eval-string* ctx (format "(keys (ns-map '%s))" ns-sym))
         sym-strs (map #(str "`" %) syms)
-        sym-expr (str "[" (string/join " " sym-strs) "]")
+        sym-expr (str "[" (str/join " " sym-strs) "]")
         syms (eval-string* ctx sym-expr)]
     syms))
 
@@ -94,7 +93,7 @@
                                     (map (fn [sym]
                                            [(str (.-name ^sci.impl.vars.SciNamespace sym)) nil :qualified])))
                 fully-qualified-names (when has-namespace?
-                                        (let [fqns (symbol (first (string/split query #"/")))
+                                        (let [fqns (symbol (first (str/split query #"/")))
                                               ns (get alias->ns fqns fqns)
                                               syms (eval-string* ctx (format "(keys (ns-publics '%s))" ns))]
                                           (map (fn [sym]
@@ -133,6 +132,9 @@
                       %) (vals msg)))
       (update :op keyword)))
 
+;; run (bb | clojure) script/update_version.clj to update this version
+(def babashka-nrepl-version "0.0.4-SNAPSHOT")
+
 (defn session-loop [ctx ^InputStream is os id {:keys [quiet debug] :as opts}]
   (when debug (println "Reading!" id (.available is)))
   (when-let [msg (try (read-bencode is)
@@ -161,10 +163,15 @@
                     (complete ctx os msg opts)
                     (recur ctx is os id opts))
         :describe
-        (do (utils/send os (utils/response-for msg {"status" #{"done"}
-                                        "ops" (zipmap #{"clone" "close" "eval" "load-file"
-                                                        "complete" "describe" "ls-sessions"}
-                                                      (repeat {}))}) opts)
+        (do (utils/send os (utils/response-for
+                            msg
+                            (merge-with merge
+                             {"status" #{"done"}
+                              "ops" (zipmap #{"clone" "close" "eval" "load-file"
+                                              "complete" "describe" "ls-sessions"}
+                                            (repeat {}))
+                              "versions" {"babashka.nrepl" babashka-nrepl-version}}
+                             (:describe opts))) opts)
             (recur ctx is os id opts))
         :ls-sessions (do (ls-sessions ctx msg os opts)
                          (recur ctx is os id opts))

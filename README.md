@@ -50,6 +50,9 @@ If `:port` is not specified, it defaults to `1667`.
 
 If `:host` is not specified, it defaults to `0.0.0.0` (bind to every interface).
 
+Options can contain a `:describe` map which will be merged in with the response
+for the `:describe` op.
+
 If no options hashmap is specified at all, all the defaults will be used. Thus
 the following is a valid way to launch an nREPL server.
 

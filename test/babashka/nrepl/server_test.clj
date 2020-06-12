@@ -1,6 +1,7 @@
 (ns babashka.nrepl.server-test
   {:author "Michiel Borkent"}
-  (:require [babashka.nrepl.server :as server]
+  (:require [babashka.nrepl.impl.server :refer [babashka-nrepl-version]]
+            [babashka.nrepl.server :as server]
             [babashka.nrepl.test-utils :as test-utils]
             [bencode.core :as bencode]
             [clojure.test :as t :refer [deftest is testing]]
@@ -65,12 +66,22 @@
           new-id! #(swap! id inc)]
       (testing "session"
         (is session))
+      (testing "describe"
+        (bencode/write-bencode os {"op" "describe" "session" session "id" (new-id!)})
+        (let [msg (read-reply in session @id)
+              id (:id msg)
+              versions (:versions msg)
+              babashka-version (bytes->str (get versions "babashka"))
+              bb-nrepl-ver (bytes->str (get versions "babashka.nrepl"))]
+          (is (= 1 id))
+          (is (= "0.0.1" babashka-version))
+          (is (= babashka-nrepl-version bb-nrepl-ver))))
       (testing "eval"
         (bencode/write-bencode os {"op" "eval" "code" "(+ 1 2 3)" "session" session "id" (new-id!)})
         (let [msg (read-reply in session @id)
               id (:id msg)
               value (:value msg)]
-          (is (= 1 id))
+          (is (= 2 id))
           (is (= value "6")))
         (bencode/write-bencode os {"op" "eval"
                                    "code" "(do (require '[clojure.test :refer [*x*]]) *x*)"
@@ -220,7 +231,8 @@
                  {:host "0.0.0.0"
                   :port nrepl-test-port
                   :debug false
-                  :debug-send false}))
+                  :debug-send false
+                  :describe {"versions" {"babashka" "0.0.1"}}}))
         (test-utils/wait-for-port "localhost" nrepl-test-port)
         (nrepl-test nrepl-test-port)
         (finally
