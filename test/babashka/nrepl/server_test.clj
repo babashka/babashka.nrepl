@@ -164,7 +164,15 @@
                 completions (:completions reply)
                 completions (mapv read-msg completions)
                 completions (into #{} (map (juxt :ns :candidate)) completions)]
-            (is (contains? completions ["clojure.test" "test/deftest"])))))
+            (is (contains? completions ["clojure.test" "test/deftest"]))))
+        (testing "completions for vars containing regex chars"
+          (bencode/write-bencode os {"op" "complete" "symbol" "+" "session" session "id" (new-id!)})
+          (let [reply (read-reply in session @id)
+                completions (:completions reply)
+                completions (mapv read-msg completions)
+                completions (into #{} (map (juxt :ns :candidate)) completions)]
+            (is (contains? completions ["clojure.core" "+"]))
+            (is (contains? completions ["clojure.core" "+'"])))))
       (testing "close + ls-sessions"
         (bencode/write-bencode os {"op" "ls-sessions" "session" session "id" (new-id!)})
         (let [reply (read-reply in session @id)
