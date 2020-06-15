@@ -57,7 +57,7 @@
     syms))
 
 (defn match [_alias->ns ns->alias query [sym-ns sym-name qualifier]]
-  (let [pat (re-pattern (str/re-quote-replacement query))]
+  (let [pat (java.util.regex.Pattern/quote query)]
     (or (when (and (identical? :unqualified qualifier) (re-find pat sym-name))
           [sym-ns sym-name])
         (when sym-ns
