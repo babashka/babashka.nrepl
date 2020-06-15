@@ -126,9 +126,30 @@
                                             "status" #{"done"}}) opts)))
 
 (defn eldoc [ctx msg os opts]
-  (let [ns (:ns msg)
-        sym (:sym msg)]
-    (prn ns sym)))
+  (let [ns-str (:ns msg)
+        sym-str (:sym msg)
+        sci-ns (when ns-str
+                 (sci-utils/namespace-object (:env ctx) (symbol ns-str) nil false))]
+    (sci/binding [vars/current-ns (or sci-ns @vars/current-ns)]
+      (let [m (eval-string* ctx (format "
+(when-let [v (ns-resolve '%s '%s)]
+  (let [m (meta v)]
+    {:arglists (:arglists m)
+     :doc (:doc m)
+     :name (:name m)
+     :ns (some-> m :ns ns-name)
+     :val @v}))" ns-str sym-str))]
+        (utils/send os
+                    (utils/response-for msg
+                                        {"ns" (:ns m)
+                                         "name" (:name m)
+                                         "eldoc" (mapv #(mapv str %) (:arglists m))
+                                         "type" (cond
+                                                  (:macro m) "macro"
+                                                  (ifn? (:val m)) "function"
+                                                  :else "unknown")
+                                         "docstring" (:doc m)
+                                         "status" #{"done"}}) opts)))))
 
 (defn read-msg [msg]
   (-> (zipmap (map keyword (keys msg))
@@ -173,7 +194,8 @@
                             (merge-with merge
                              {"status" #{"done"}
                               "ops" (zipmap #{"clone" "close" "eval" "load-file"
-                                              "complete" "describe" "ls-sessions"}
+                                              "complete" "describe" "ls-sessions"
+                                              "eldoc"}
                                             (repeat {}))
                               "versions" {"babashka.nrepl" babashka-nrepl-version}}
                              (:describe opts))) opts)
