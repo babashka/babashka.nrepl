@@ -123,7 +123,12 @@
 (defn ls-sessions [ctx msg os opts]
   (let [sessions @(:sessions ctx)]
     (utils/send os (utils/response-for msg {"sessions" sessions
-                                "status" #{"done"}}) opts)))
+                                            "status" #{"done"}}) opts)))
+
+(defn eldoc [ctx msg os opts]
+  (let [ns (:ns msg)
+        sym (:sym msg)]
+    (prn ns sym)))
 
 (defn read-msg [msg]
   (-> (zipmap (map keyword (keys msg))
@@ -175,6 +180,9 @@
             (recur ctx is os id opts))
         :ls-sessions (do (ls-sessions ctx msg os opts)
                          (recur ctx is os id opts))
+        :eldoc (do
+                 (eldoc ctx msg os opts)
+                 (recur ctx is os id opts))
         ;; fallback
         (do (when debug
               (println "Unhandled message" msg))
