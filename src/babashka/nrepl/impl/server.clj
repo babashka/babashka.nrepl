@@ -134,22 +134,22 @@
       (let [m (eval-string* ctx (format "
 (when-let [v (ns-resolve '%s '%s)]
   (let [m (meta v)]
-    {:arglists (:arglists m)
+    (assoc m :arglists (:arglists m)
      :doc (:doc m)
      :name (:name m)
      :ns (some-> m :ns ns-name)
-     :val @v}))" ns-str sym-str))]
+     :val @v)))" ns-str sym-str))
+            reply {"ns" (:ns m)
+                   "name" (:name m)
+                   "eldoc" (mapv #(mapv str %) (:arglists m))
+                   "type" (cond
+                            (:macro m) "macro"
+                            (ifn? (:val m)) "function"
+                            :else "unknown")
+                   "docstring" (:doc m)
+                   "status" #{"done"}}]
         (utils/send os
-                    (utils/response-for msg
-                                        {"ns" (:ns m)
-                                         "name" (:name m)
-                                         "eldoc" (mapv #(mapv str %) (:arglists m))
-                                         "type" (cond
-                                                  (:macro m) "macro"
-                                                  (ifn? (:val m)) "function"
-                                                  :else "unknown")
-                                         "docstring" (:doc m)
-                                         "status" #{"done"}}) opts)))))
+                    (utils/response-for msg reply) opts)))))
 
 (defn read-msg [msg]
   (-> (zipmap (map keyword (keys msg))
