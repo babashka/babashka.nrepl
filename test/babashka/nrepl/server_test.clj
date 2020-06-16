@@ -233,27 +233,41 @@
                        output
                        (recur (str output out)))))))))
       (testing "eldoc"
-        (bencode/write-bencode os {"op" "eldoc" "ns" "user"
-                                   "sym" "inc"
-                                   "session" session "id" (new-id!)})
-        (let [{:keys [docstring eldoc type]} (read-reply in session @id)]
-          (is (str/includes? docstring "Returns a number one greater than num"))
-          (let [eldoc (read-eldoc eldoc)]
-            (is (= '((x)) eldoc))
+        (testing "eldoc of inc"
+          (bencode/write-bencode os {"op" "eldoc" "ns" "user"
+                                     "sym" "inc"
+                                     "session" session "id" (new-id!)})
+          (let [{:keys [docstring eldoc type]} (read-reply in session @id)]
+            (is (str/includes? docstring "Returns a number one greater than num"))
+            (let [eldoc (read-eldoc eldoc)]
+              (is (= '((x)) eldoc))
+              (is (= "function" type)))))
+        (testing "user-defined macro"
+          (bencode/write-bencode os {"op" "eval"
+                                     "ns" "user"
+                                     "code" "(defmacro foo \"foo\" [x y & zs])"
+                                     "session" session "id" (new-id!)})
+          (read-reply in session @id)
+          (bencode/write-bencode os {"op" "eldoc" "ns" "user"
+                                     "sym" "foo"
+                                     "session" session "id" (new-id!)})
+          (let [{:keys [docstring eldoc type]} (read-reply in session @id)]
+            (is (str/includes? docstring "foo"))
+            (let [eldoc (read-eldoc eldoc)]
+              (is (= '((x y & zs)) eldoc)))
             (is (= "function" type))))
-        (bencode/write-bencode os {"op" "eval"
-                                   "ns" "user"
-                                   "code" "(defmacro foo \"foo\" [x y & zs])"
-                                   "session" session "id" (new-id!)})
-        (read-reply in session @id)
-        (bencode/write-bencode os {"op" "eldoc" "ns" "user"
-                                   "sym" "foo"
-                                   "session" session "id" (new-id!)})
-        (let [{:keys [docstring eldoc type]} (read-reply in session @id)]
-          (is (str/includes? docstring "foo"))
-          (let [eldoc (read-eldoc eldoc)]
-            (is (= '((x y & zs)) eldoc)))
-          (is (= "macro" type)))))))
+        (testing "non-function var"
+          (bencode/write-bencode os {"op" "eval"
+                                     "ns" "user"
+                                     "code" "(def x \"foo\" 1)"
+                                     "session" session "id" (new-id!)})
+          (read-reply in session @id)
+          (bencode/write-bencode os {"op" "eldoc" "ns" "user"
+                                     "sym" "x"
+                                     "session" session "id" (new-id!)})
+          (let [{:keys [docstring type]} (read-reply in session @id)]
+            (is (str/includes? docstring "foo"))
+            (is (= "variable" type))))))))
 
 (deftest nrepl-server-test
   (let [service (atom nil)]

@@ -143,9 +143,8 @@
                    "name" (:name m)
                    "eldoc" (mapv #(mapv str %) (:arglists m))
                    "type" (cond
-                            (:macro m) "macro"
                             (ifn? (:val m)) "function"
-                            :else "unknown")
+                            :else "variable")
                    "docstring" (:doc m)
                    "status" #{"done"}}]
         (utils/send os
