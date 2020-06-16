@@ -123,7 +123,32 @@
 (defn ls-sessions [ctx msg os opts]
   (let [sessions @(:sessions ctx)]
     (utils/send os (utils/response-for msg {"sessions" sessions
-                                "status" #{"done"}}) opts)))
+                                            "status" #{"done"}}) opts)))
+
+(defn eldoc [ctx msg os opts]
+  (let [ns-str (:ns msg)
+        sym-str (:sym msg)
+        sci-ns (when ns-str
+                 (sci-utils/namespace-object (:env ctx) (symbol ns-str) nil false))]
+    (sci/binding [vars/current-ns (or sci-ns @vars/current-ns)]
+      (let [m (eval-string* ctx (format "
+(when-let [v (ns-resolve '%s '%s)]
+  (let [m (meta v)]
+    (assoc m :arglists (:arglists m)
+     :doc (:doc m)
+     :name (:name m)
+     :ns (some-> m :ns ns-name)
+     :val @v)))" ns-str sym-str))
+            reply {"ns" (:ns m)
+                   "name" (:name m)
+                   "eldoc" (mapv #(mapv str %) (:arglists m))
+                   "type" (cond
+                            (ifn? (:val m)) "function"
+                            :else "variable")
+                   "docstring" (:doc m)
+                   "status" #{"done"}}]
+        (utils/send os
+                    (utils/response-for msg reply) opts)))))
 
 (defn read-msg [msg]
   (-> (zipmap (map keyword (keys msg))
@@ -168,13 +193,17 @@
                             (merge-with merge
                              {"status" #{"done"}
                               "ops" (zipmap #{"clone" "close" "eval" "load-file"
-                                              "complete" "describe" "ls-sessions"}
+                                              "complete" "describe" "ls-sessions"
+                                              "eldoc"}
                                             (repeat {}))
                               "versions" {"babashka.nrepl" babashka-nrepl-version}}
                              (:describe opts))) opts)
             (recur ctx is os id opts))
         :ls-sessions (do (ls-sessions ctx msg os opts)
                          (recur ctx is os id opts))
+        :eldoc (do
+                 (eldoc ctx msg os opts)
+                 (recur ctx is os id opts))
         ;; fallback
         (do (when debug
               (println "Unhandled message" msg))
