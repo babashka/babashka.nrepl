@@ -267,7 +267,13 @@
                                      "session" session "id" (new-id!)})
           (let [{:keys [docstring type]} (read-reply in session @id)]
             (is (str/includes? docstring "foo"))
-            (is (= "variable" type))))))))
+            (is (= "variable" type))))
+        (testing "eldoc of invalid characters"
+          (bencode/write-bencode os {"op" "eldoc" "ns" "user"
+                                     "sym" ""
+                                     "session" session "id" (new-id!)})
+          (let [{:keys [status]} (read-reply in session @id)]
+            (is (contains? (set status) "no-eldoc"))))))))
 
 (deftest nrepl-server-test
   (let [service (atom nil)]
