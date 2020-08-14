@@ -214,7 +214,7 @@
             (utils/send os (utils/response-for msg {"status" #{"error" "unknown-op" "done"}}) opts)
             (recur ctx is os id opts))))))
 
-(defn listen [ctx ^ServerSocket listener {:keys [debug] :as opts}]
+(defn listen [ctx ^ServerSocket listener {:keys [debug thread-bind] :as opts}]
   (when debug (println "Listening"))
   (let [client-socket (.accept listener)
         in (.getInputStream client-socket)
@@ -223,9 +223,9 @@
         out (BufferedOutputStream. out)]
     (when debug (println "Connected."))
     (sci/future
-      (sci/binding
-          ;; allow *ns* to be set! inside future
-          [vars/current-ns (vars/->SciNamespace 'user nil)
-           sci/print-length @sci/print-length]
+      (sci/with-bindings
+        (merge {vars/current-ns (vars/->SciNamespace 'user nil)
+                sci/print-length @sci/print-length}
+               (zipmap thread-bind (map deref thread-bind)))
         (session-loop ctx in out "pre-init" opts)))
     (recur ctx listener opts)))

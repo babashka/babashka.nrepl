@@ -18,6 +18,7 @@
 (def nrepl-test-port 54345)
 
 (def dynvar (sci/new-dynamic-var '*x* 10))
+(def reflection-var (sci/new-dynamic-var '*warn-on-reflection* false))
 
 (def namespaces
   ;; fake namespaces for symbol completion tests
@@ -25,7 +26,8 @@
                    'somethingelse 'bar}
    'clojure.test {'deftest 'foo
                   'somethingelse 'bar
-                  '*x* dynvar}})
+                  '*x* dynvar}
+   'clojure.core {'*warn-on-reflection* reflection-var}})
 
 (defn bytes->str [x]
   (if (bytes? x) (String. (bytes x))
@@ -273,7 +275,11 @@
                                      "sym" ""
                                      "session" session "id" (new-id!)})
           (let [{:keys [status]} (read-reply in session @id)]
-            (is (contains? (set status) "no-eldoc"))))))))
+            (is (contains? (set status) "no-eldoc")))))
+      (testing "dynamic var can be set! if provided in :dynamic-vars option"
+        (bencode/write-bencode os {"op" "eval" "code" "(set! *warn-on-reflection* true)"
+                                   "session" session "id" (new-id!)})
+        (is (= "true" (:value (read-reply in session @id))))))))
 
 (deftest nrepl-server-test
   (let [service (atom nil)]
@@ -287,7 +293,8 @@
                   :port nrepl-test-port
                   :debug false
                   :debug-send false
-                  :describe {"versions" {"babashka" "0.0.1"}}}))
+                  :describe {"versions" {"babashka" "0.0.1"}}
+                  :thread-bind [reflection-var]}))
         (test-utils/wait-for-port "localhost" nrepl-test-port)
         (nrepl-test nrepl-test-port)
         (finally

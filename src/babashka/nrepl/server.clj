@@ -19,9 +19,6 @@
     {:host host
      :port port}))
 
-#_ (parse-opt "localhost:1667")
-#_ (parse-opt "1667")
-
 (defn start-server! [ctx & [{:keys [host port quiet]
                              :or {host "0.0.0.0"
                                   port 1667}
