@@ -25,12 +25,15 @@
       (sci/with-bindings (cond-> {}
                            sci-ns (assoc vars/current-ns sci-ns))
         (loop []
-          (let [pw (utils/replying-print-writer o msg opts)
+          (let [out-pw (utils/replying-print-writer "out" o msg opts)
+                err-pw (utils/replying-print-writer "err" o msg opts)
                 form (p/parse-next ctx reader)
                 value (if (identical? :edamame.impl.parser/eof form) ::nil
-                          (let [result (sci/with-bindings {sci/out pw}
+                          (let [result (sci/with-bindings {sci/out out-pw
+                                                           sci/err err-pw}
                                          (eval-form ctx form))]
-                            (.flush pw)
+                            (.flush out-pw)
+                            (.flush err-pw)
                             result))
                 env (:env ctx)]
             (swap! env update-in [:namespaces 'clojure.core]

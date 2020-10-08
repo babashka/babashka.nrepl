@@ -234,6 +234,31 @@
                      (if (= status ["done"])
                        output
                        (recur (str output out)))))))))
+
+      (testing "error"
+        (bencode/write-bencode os {"op" "eval" "code" "(binding [*out* *err*] (dotimes [i 3] (println \"Hello\")))"
+                                   "session" session "id" (new-id!)})
+        (dotimes [_ 3]
+          (let [reply (read-reply in session @id)]
+            (is (= "Hello\n" (:err reply))))))
+      (testing "error flushing"
+        (bencode/write-bencode os {"op" "eval" "code" "(binding [*out* *err*] (print \"short no newline\"))"
+                                   "session" session "id" (new-id!)})
+        (is (= "short no newline" (:err (read-reply in session @id)))))
+      (testing "error not truncating"
+        (let [large-block
+              (apply str
+                     (repeatedly 5000  ;; bigger than the 1024 buffer size
+                                 #(rand-nth
+                                   (seq "abcdefghijklmnopqrstuvwxyz ☂☀\t "))))]
+          (bencode/write-bencode os {"op" "eval" "code" (format "(binding [*out* *err*] (print \"%s\"))" large-block)
+                                     "session" session "id" (new-id!)})
+          (is (= large-block
+                 (loop [error ""]
+                   (let [{:keys [status err]} (read-reply in session @id)]
+                     (if (= status ["done"])
+                       error
+                       (recur (str error err)))))))))
       (testing "eldoc"
         (testing "eldoc of inc"
           (bencode/write-bencode os {"op" "eldoc" "ns" "user"

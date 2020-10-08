@@ -43,7 +43,7 @@
   of the content written to that `PrintWriter` will be sent as messages on the
   transport of `msg`, keyed by `key`."
   ^java.io.PrintWriter
-  [o msg opts]
+  [key o msg opts]
   (-> (proxy [Writer] []
         (write
           ([x]
@@ -54,7 +54,7 @@
                  text (str (doto (StringWriter.)
                              (.write cbuf ^int off ^int len)))]
              (when (pos? (count text))
-               (send o (response-for msg {"out" text}) opts)))))
+               (send o (response-for msg {key text}) opts)))))
         (flush [])
         (close []))
       (BufferedWriter. 1024)
