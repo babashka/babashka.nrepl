@@ -127,7 +127,15 @@
                                      "id" (new-id!)})
           (let [reply-1 (read-reply in session @id)
                 reply-2 (read-reply in session @id)]
-            (is (= "6" (:value reply-1) (:value reply-2))))))
+            (is (= "6" (:value reply-1) (:value reply-2)))))
+        (testing "*file* is bound to file"
+          (bencode/write-bencode os {"op" "eval"
+                                     "file" "/tmp/foo.clj"
+                                     "code" "*file*"
+                                     "session" session
+                                     "id" (new-id!)})
+          (let [reply (read-reply in session @id)]
+            (is (= "\"/tmp/foo.clj\"" (:value reply))))))
       (testing "load-file"
         (bencode/write-bencode os {"op" "load-file" "file" "(ns foo) (defn foo [] :foo)" "session" session "id" (new-id!)})
         (read-reply in session @id)

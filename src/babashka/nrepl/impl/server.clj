@@ -20,10 +20,12 @@
     (let [code-str (get msg :code)
           reader (r/indexing-push-back-reader (r/string-push-back-reader code-str))
           ns-str (get msg :ns)
-          sci-ns (when ns-str (sci-utils/namespace-object (:env ctx) (symbol ns-str) true nil))]
+          sci-ns (when ns-str (sci-utils/namespace-object (:env ctx) (symbol ns-str) true nil))
+          file (:file msg)]
       (when debug (println "current ns" (vars/current-ns-name)))
       (sci/with-bindings (cond-> {}
-                           sci-ns (assoc vars/current-ns sci-ns))
+                           sci-ns (assoc vars/current-ns sci-ns)
+                           file (assoc sci/file file))
         (loop []
           (let [out-pw (utils/replying-print-writer "out" o msg opts)
                 err-pw (utils/replying-print-writer "err" o msg opts)
