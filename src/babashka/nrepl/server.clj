@@ -27,7 +27,7 @@
         inet-address (java.net.InetAddress/getByName host)
         socket-server (new ServerSocket port 0 inet-address)]
     (when-not quiet
-      (println (format "Started nREPL server at %s:%d" (.getHostAddress inet-address) port)))
+      (println (format "Started nREPL server at %s:%d" (.getHostAddress inet-address) (.getLocalPort socket-server))))
     {:socket socket-server
      :future (sci/future
                (server/listen ctx socket-server opts))}))
