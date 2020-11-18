@@ -10,7 +10,7 @@
   :dependencies [[org.clojure/clojure "1.10.2-alpha1"]
                  [nrepl/bencode "1.1.0"]
                  [borkdude/edamame "0.0.11-alpha.9"]
-                 [borkdude/sci "0.0.13-alpha.20"]]
+                 [borkdude/sci "0.1.1-alpha.10"]]
   :deploy-repositories [["clojars" {:url "https://clojars.org/repo"
                                     :username :env/babashka_nrepl_clojars_user
                                     :password :env/babashka_nrepl_clojars_pass

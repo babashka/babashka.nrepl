@@ -4,7 +4,6 @@
   (:require [babashka.nrepl.impl.utils :as utils]
             [bencode.core :refer [read-bencode]]
             [clojure.string :as str]
-            [clojure.tools.reader.reader-types :as r]
             [sci.core :as sci]
             [sci.impl.interpreter :refer [eval-string* eval-form]]
             [sci.impl.parser :as p]
@@ -18,40 +17,40 @@
 (defn eval-msg [ctx o msg {:keys [debug] :as opts}]
   (try
     (let [code-str (get msg :code)
-          reader (r/indexing-push-back-reader (r/string-push-back-reader code-str))
+          reader (sci/reader code-str)
           ns-str (get msg :ns)
           sci-ns (when ns-str (sci-utils/namespace-object (:env ctx) (symbol ns-str) true nil))
           file (:file msg)]
       (when debug (println "current ns" (vars/current-ns-name)))
-      (sci/with-bindings (cond-> {}
-                           sci-ns (assoc vars/current-ns sci-ns)
+      (sci/with-bindings (cond-> {sci/*1 *1
+                                  sci/*2 *2
+                                  sci/*3 *3
+                                  sci/*e *e}
+                           sci-ns (assoc sci/ns sci-ns)
                            file (assoc sci/file file))
         (loop []
           (let [out-pw (utils/replying-print-writer "out" o msg opts)
                 err-pw (utils/replying-print-writer "err" o msg opts)
                 form (p/parse-next ctx reader)
-                value (if (identical? :edamame.impl.parser/eof form) ::nil
-                          (let [result (sci/with-bindings {sci/out out-pw
-                                                           sci/err err-pw}
-                                         (eval-form ctx form))]
-                            (.flush out-pw)
-                            (.flush err-pw)
-                            result))
-                env (:env ctx)]
-            (swap! env update-in [:namespaces 'clojure.core]
-                   (fn [core]
-                     (assoc core
-                            '*1 value
-                            '*2 (get core '*1)
-                            '*3 (get core '*2))))
-            (utils/send o (utils/response-for msg (cond-> {"ns" (vars/current-ns-name)}
-                                        (not (identical? value ::nil)) (assoc "value" (pr-str value)))) opts)
-            (when (not (identical? ::nil value))
-              (recur)))))
+                eof? (identical? :edamame.impl.parser/eof form)]
+            (when-not eof?
+              (let [value (when-not eof?
+                            (let [result (sci/with-bindings {sci/out out-pw
+                                                             sci/err err-pw}
+                                           (eval-form ctx form))]
+                              (.flush out-pw)
+                              (.flush err-pw)
+                              result))]
+                (set! *3 *2)
+                (set! *2 *1)
+                (set! *1 value)
+                (utils/send o (utils/response-for msg
+                                                  {"ns" (vars/current-ns-name)
+                                                   "value" (pr-str value)}) opts)
+                (recur))))))
       (utils/send o (utils/response-for msg {"status" #{"done"}}) opts))
     (catch Exception ex
-      (swap! (:env ctx) update-in [:namespaces 'clojure.core]
-             assoc '*e ex)
+      (set! *e ex)
       (utils/send-exception o msg ex opts))))
 
 (defn fully-qualified-syms [ctx ns-sym]
@@ -228,9 +227,17 @@
         out (BufferedOutputStream. out)]
     (when debug (println "Connected."))
     (sci/future
-      (sci/with-bindings
-        (merge {vars/current-ns (vars/->SciNamespace 'user nil)
-                sci/print-length @sci/print-length}
-               (zipmap thread-bind (map deref thread-bind)))
-        (session-loop ctx in out "pre-init" opts)))
+      (binding [*1 nil
+                *2 nil
+                *3 nil
+                *e nil]
+        (sci/with-bindings
+          (merge {sci/ns (sci/create-ns 'user nil)
+                  sci/print-length @sci/print-length
+                  sci/*1 nil
+                  sci/*2 nil
+                  sci/*3 nil
+                  sci/*e nil}
+                 (zipmap thread-bind (map deref thread-bind)))
+          (session-loop ctx in out "pre-init" opts))))
     (recur ctx listener opts)))

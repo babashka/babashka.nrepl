@@ -90,6 +90,15 @@
               value (:value msg)]
           (is (= 2 id))
           (is (= value "6")))
+        (testing "REPL variables"
+          (bencode/write-bencode os {"op" "eval" "code" "(* 2 8)" "session" session "id" (new-id!)})
+          (let [msg (read-reply in session @id)
+                value (:value msg)]
+            (is (= value "16")))
+          (bencode/write-bencode os {"op" "eval" "code" "[*2 *1]" "session" session "id" (new-id!)})
+          (let [msg (read-reply in session @id)
+                value (:value msg)]
+            (is (= "[6 16]" value ))))
         (bencode/write-bencode os {"op" "eval"
                                    "code" "(do (require '[clojure.test :refer [*x*]]) *x*)"
                                    "session" session "id" (new-id!)})
