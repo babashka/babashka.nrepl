@@ -32,7 +32,7 @@
           (let [out-pw (utils/replying-print-writer "out" o msg opts)
                 err-pw (utils/replying-print-writer "err" o msg opts)
                 form (p/parse-next ctx reader)
-                eof? (identical? :edamame.impl.parser/eof form)]
+                eof? (identical? :edamame.core/eof form)]
             (when-not eof?
               (let [value (when-not eof?
                             (let [result (sci/with-bindings {sci/out out-pw
