@@ -14,7 +14,7 @@
 
 (set! *warn-on-reflection* true)
 
-(defn eval-msg [ctx o msg {:keys [debug] :as opts}]
+(defn eval-msg [ctx o msg {:keys [debug pprint] :as opts}]
   (try
     (let [code-str (get msg :code)
           reader (sci/reader code-str)
@@ -218,8 +218,9 @@
             (utils/send os (utils/response-for msg {"status" #{"error" "unknown-op" "done"}}) opts)
             (recur ctx is os id opts))))))
 
-(defn listen [ctx ^ServerSocket listener {:keys [debug thread-bind] :as opts}]
+(defn listen [ctx ^ServerSocket listener {:keys [debug thread-bind pprint] :as opts}]
   (when debug (println "Listening"))
+  (when pprint (println "pretty-printing has been enabled"))
   (let [client-socket (.accept listener)
         in (.getInputStream client-socket)
         in (PushbackInputStream. in)

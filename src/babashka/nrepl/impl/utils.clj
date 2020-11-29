@@ -7,14 +7,21 @@
 
 (set! *warn-on-reflection* true)
 
+;; TODO: should be based on this method here https://github.com/nrepl/nrepl/blob/0895caa7f0910c013014d554bbb262834a8408e4/src/clojure/nrepl/middleware/print.clj#L122
+(defn pretty-print [msg]
+  ;; TODO: insert pretty printing logic here
+  )
+
 (defn response-for [old-msg msg]
   (let [session (get old-msg :session "none")
         id (get old-msg :id "unknown")]
     (assoc msg "session" session "id" id)))
 
-(defn send [^OutputStream os msg {:keys [debug-send]}]
+(defn send [^OutputStream os msg {:keys [debug-send pprint]}]
   (when debug-send (prn "Sending" msg))
-  (write-bencode os msg)
+  (if pprint
+    (write-bencode os (pretty-print msg))
+    (write-bencode os msg))
   (.flush os))
 
 (defn send-exception [os msg ^Throwable ex {:keys [debug] :as opts}]
