@@ -2,7 +2,7 @@
   {:author "Michiel Borkent"}
   (:require [babashka.nrepl.impl.server :as server]
             [clojure.string :as string]
-            [sci.addons :as addons])
+            [sci.core :as sci])
   (:import [java.net ServerSocket]))
 
 (set! *warn-on-reflection* true)
@@ -19,7 +19,7 @@
     {:host host
      :port port}))
 
-(defn start-server! [ctx & [{:keys [host port quiet pprint]
+(defn start-server! [ctx & [{:keys [host port quiet]
                              :or {host "0.0.0.0"
                                   port 1667}
                              :as opts}]]
