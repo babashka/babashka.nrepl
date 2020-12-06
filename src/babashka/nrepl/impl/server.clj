@@ -14,13 +14,17 @@
 
 (set! *warn-on-reflection* true)
 
-(defn eval-msg [ctx o msg {:keys [debug pprint] :as opts}]
+(def pretty-print-fns
+  ['clojure.core/prn 'clojure.core/pprint])
+
+(defn eval-msg [ctx o msg {:keys [debug] :as opts}]
   (try
     (let [code-str (get msg :code)
           reader (sci/reader code-str)
           ns-str (get msg :ns)
           sci-ns (when ns-str (sci-utils/namespace-object (:env ctx) (symbol ns-str) true nil))
-          file (:file msg)]
+          file (:file msg)
+          nrepl-pprint (:nrepl.middleware.print/print msg)]
       (when debug (println "current ns" (vars/current-ns-name)))
       (sci/with-bindings (cond-> {sci/*1 *1
                                   sci/*2 *2
@@ -46,7 +50,10 @@
                 (set! *1 value)
                 (utils/send o (utils/response-for msg
                                                   {"ns" (vars/current-ns-name)
-                                                   "value" (pr-str value)}) opts)
+                                                   "value" (if (not (nil? nrepl-pprint))
+                                                             (when (not (nil? (some #(= % nrepl-pprint) pretty-print-fns)))
+                                                               (@(resolve (symbol "clojure.core" nrepl-pprint))) value)
+                                                             (pr-str value))}) opts)
                 (recur))))))
       (utils/send o (utils/response-for msg {"status" #{"done"}}) opts))
     (catch Exception ex
@@ -92,7 +99,7 @@
                                              (map (fn [sym]
                                                     [(str ns) (str sym) :qualified])
                                                   syms)))
-                                         (keys alias->ns)))
+  4                                       (keys alias->ns)))
                 all-namespaces (->> (eval-string* ctx (format "(all-ns)"))
                                     (map (fn [sym]
                                            [(str (.-name ^sci.impl.vars.SciNamespace sym)) nil :qualified])))
@@ -218,9 +225,8 @@
             (utils/send os (utils/response-for msg {"status" #{"error" "unknown-op" "done"}}) opts)
             (recur ctx is os id opts))))))
 
-(defn listen [ctx ^ServerSocket listener {:keys [debug thread-bind pprint] :as opts}]
+(defn listen [ctx ^ServerSocket listener {:keys [debug thread-bind] :as opts}]
   (when debug (println "Listening"))
-  (when pprint (println "pretty-printing has been enabled"))
   (let [client-socket (.accept listener)
         in (.getInputStream client-socket)
         in (PushbackInputStream. in)
