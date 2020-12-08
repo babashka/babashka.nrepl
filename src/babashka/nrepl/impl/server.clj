@@ -14,8 +14,9 @@
 
 (set! *warn-on-reflection* true)
 
-(def pretty-print-fns
-  ['clojure.core/prn 'clojure.core/pprint])
+(def pretty-print-fns-map
+  {'clojure.core/prn prn
+   'clojure.pprint/pprint clojure.pprint/pprint})
 
 (defn eval-msg [ctx o msg {:keys [debug] :as opts}]
   (try
@@ -50,9 +51,13 @@
                 (set! *1 value)
                 (utils/send o (utils/response-for msg
                                                   {"ns" (vars/current-ns-name)
-                                                   "value" (if (not (nil? nrepl-pprint))
-                                                             (when (not (nil? (some #(= % nrepl-pprint) pretty-print-fns)))
-                                                               (@(resolve (symbol "clojure.core" nrepl-pprint))) value)
+                                                   "value" (if nrepl-pprint
+                                                             (let [pprint-fn (get nrepl-pprint pretty-print-fns-map)]
+                                                               (if (not (nil? pprint-fn))
+                                                                 (pprint-fn value)
+                                                                 (do
+                                                                   (println "Pretty-Printing is only supported for clojure.core/prn and clojure.pprint/pprint.")
+                                                                   (pr-str value))))
                                                              (pr-str value))}) opts)
                 (recur))))))
       (utils/send o (utils/response-for msg {"status" #{"done"}}) opts))
@@ -99,7 +104,7 @@
                                              (map (fn [sym]
                                                     [(str ns) (str sym) :qualified])
                                                   syms)))
-  4                                       (keys alias->ns)))
+                                         (keys alias->ns)))
                 all-namespaces (->> (eval-string* ctx (format "(all-ns)"))
                                     (map (fn [sym]
                                            [(str (.-name ^sci.impl.vars.SciNamespace sym)) nil :qualified])))
