@@ -8,7 +8,8 @@
             [sci.impl.interpreter :refer [eval-string* eval-form]]
             [sci.impl.parser :as p]
             [sci.impl.utils :as sci-utils]
-            [sci.impl.vars :as vars])
+            [sci.impl.vars :as vars]
+            [clojure.pprint :refer [pprint]])
   (:import [java.io InputStream PushbackInputStream EOFException BufferedOutputStream]
            [java.net ServerSocket]))
 
@@ -16,7 +17,7 @@
 
 (def pretty-print-fns-map
   {'clojure.core/prn prn
-   'clojure.pprint/pprint clojure.pprint/pprint})
+   'clojure.pprint/pprint pprint})
 
 (defn eval-msg [ctx o msg {:keys [debug] :as opts}]
   (try
@@ -52,12 +53,12 @@
                 (utils/send o (utils/response-for msg
                                                   {"ns" (vars/current-ns-name)
                                                    "value" (if nrepl-pprint
-                                                             (let [pprint-fn (get nrepl-pprint pretty-print-fns-map)]
-                                                               (if (not (nil? pprint-fn))
-                                                                 (pprint-fn value)
-                                                                 (do
-                                                                   (println "Pretty-Printing is only supported for clojure.core/prn and clojure.pprint/pprint.")
-                                                                   (pr-str value))))
+                                                             (if-let [pprint-fn (get nrepl-pprint pretty-print-fns-map)]
+                                                               (pprint-fn value)
+                                                               (do
+                                                                 (when debug
+                                                                   (println "Pretty-Printing is only supported for clojure.core/prn and clojure.pprint/pprint."))
+                                                                 (pr-str value)))
                                                              (pr-str value))}) opts)
                 (recur))))))
       (utils/send o (utils/response-for msg {"status" #{"done"}}) opts))
