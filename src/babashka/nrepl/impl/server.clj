@@ -5,8 +5,6 @@
             [bencode.core :refer [read-bencode]]
             [clojure.string :as str]
             [sci.core :as sci]
-            [sci.impl.interpreter :refer [eval-string* eval-form]]
-            [sci.impl.parser :as p]
             [sci.impl.utils :as sci-utils]
             [sci.impl.vars :as vars])
   (:import [java.io InputStream PushbackInputStream EOFException BufferedOutputStream]
@@ -31,13 +29,13 @@
         (loop []
           (let [out-pw (utils/replying-print-writer "out" o msg opts)
                 err-pw (utils/replying-print-writer "err" o msg opts)
-                form (p/parse-next ctx reader)
-                eof? (identical? :edamame.impl.parser/eof form)]
+                form (sci/parse-next ctx reader)
+                eof? (identical? :sci.core/eof form)]
             (when-not eof?
               (let [value (when-not eof?
                             (let [result (sci/with-bindings {sci/out out-pw
                                                              sci/err err-pw}
-                                           (eval-form ctx form))]
+                                           (sci/eval-form ctx form))]
                               (.flush out-pw)
                               (.flush err-pw)
                               result))]
@@ -54,10 +52,10 @@
       (utils/send-exception o msg ex opts))))
 
 (defn fully-qualified-syms [ctx ns-sym]
-  (let [syms (eval-string* ctx (format "(keys (ns-map '%s))" ns-sym))
+  (let [syms (sci/eval-string* ctx (format "(keys (ns-map '%s))" ns-sym))
         sym-strs (map #(str "`" %) syms)
         sym-expr (str "[" (str/join " " sym-strs) "]")
-        syms (eval-string* ctx sym-expr)]
+        syms (sci/eval-string* ctx sym-expr)]
     syms))
 
 (defn match [_alias->ns ns->alias query [sym-ns sym-name qualifier]]
@@ -79,27 +77,27 @@
         (if-let [query (or (:symbol msg)
                            (:prefix msg))]
           (let [has-namespace? (str/includes? query "/")
-                from-current-ns (fully-qualified-syms ctx (eval-string* ctx "(ns-name *ns*)"))
+                from-current-ns (fully-qualified-syms ctx (sci/eval-string* ctx "(ns-name *ns*)"))
                 from-current-ns (map (fn [sym]
                                        [(namespace sym) (name sym) :unqualified])
                                      from-current-ns)
-                alias->ns (eval-string* ctx "(let [m (ns-aliases *ns*)] (zipmap (keys m) (map ns-name (vals m))))")
+                alias->ns (sci/eval-string* ctx "(let [m (ns-aliases *ns*)] (zipmap (keys m) (map ns-name (vals m))))")
                 ns->alias (zipmap (vals alias->ns) (keys alias->ns))
                 from-aliased-nss (doall (mapcat
                                          (fn [alias]
                                            (let [ns (get alias->ns alias)
-                                                 syms (eval-string* ctx (format "(keys (ns-publics '%s))" ns))]
+                                                 syms (sci/eval-string* ctx (format "(keys (ns-publics '%s))" ns))]
                                              (map (fn [sym]
                                                     [(str ns) (str sym) :qualified])
                                                   syms)))
                                          (keys alias->ns)))
-                all-namespaces (->> (eval-string* ctx (format "(all-ns)"))
+                all-namespaces (->> (sci/eval-string* ctx (format "(all-ns)"))
                                     (map (fn [sym]
                                            [(str (.-name ^sci.impl.vars.SciNamespace sym)) nil :qualified])))
                 fully-qualified-names (when has-namespace?
                                         (let [fqns (symbol (first (str/split query #"/")))
                                               ns (get alias->ns fqns fqns)
-                                              syms (eval-string* ctx (format "(keys (ns-publics '%s))" ns))]
+                                              syms (sci/eval-string* ctx (format "(keys (ns-publics '%s))" ns))]
                                           (map (fn [sym]
                                                  [(str ns) (str sym) :qualified])
                                                syms)))
@@ -136,7 +134,7 @@
                  (sci-utils/namespace-object (:env ctx) (symbol ns-str) nil false))]
     (try
       (sci/binding [vars/current-ns (or sci-ns @vars/current-ns)]
-        (let [m (eval-string* ctx (format "
+        (let [m (sci/eval-string* ctx (format "
 (when-let [v (ns-resolve '%s '%s)]
   (let [m (meta v)]
     (assoc m :arglists (:arglists m)
