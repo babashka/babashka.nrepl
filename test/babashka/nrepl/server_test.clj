@@ -146,13 +146,14 @@
           (let [reply (read-reply in session @id)]
             (is (= "\"/tmp/foo.clj\"" (:value reply)))))
         (testing "supports print middleware for pprint"
-          (bencode/write-bencode os {"op" "eval"
-                                     "code" "{:a {:a 0} :b {:a 0} :c {:a 0 :b 1} :d {:a 0 :b 1} :e {:a 0 :b 1}}"
-                                     "nrepl.middleware.print/print" "clojure.pprint/pprint"
-                                     "session" session
-                                     "id" (new-id!)})
-          (let [reply (read-reply in session @id)]
-            (is (= "{:e {:b 1, :a 0},\n :c {:b 1, :a 0},\n :b {:a 0},\n :d {:b 1, :a 0},\n :a {:a 0}}\n" (:value reply))))))
+          (doseq [print-fn ["clojure.pprint/pprint" "cider.nrepl.pprint/pprint"]]
+            (bencode/write-bencode os {"op" "eval"
+                                       "code" "{:a {:a 0} :b {:a 0} :c {:a 0 :b 1} :d {:a 0 :b 1} :e {:a 0 :b 1}}"
+                                       "nrepl.middleware.print/print" print-fn,
+                                       "session" session
+                                       "id" (new-id!)})
+            (let [reply (read-reply in session @id)]
+              (is (= "{:e {:b 1, :a 0},\n :c {:b 1, :a 0},\n :b {:a 0},\n :d {:b 1, :a 0},\n :a {:a 0}}\n" (:value reply))))))
       (testing "load-file"
         (bencode/write-bencode os {"op" "load-file" "file" "(ns foo) (defn foo [] :foo)" "session" session "id" (new-id!)})
         (read-reply in session @id)
@@ -329,7 +330,7 @@
       (testing "dynamic var can be set! if provided in :dynamic-vars option"
         (bencode/write-bencode os {"op" "eval" "code" "(set! *warn-on-reflection* true)"
                                    "session" session "id" (new-id!)})
-        (is (= "true" (:value (read-reply in session @id))))))))
+        (is (= "true" (:value (read-reply in session @id)))))))))
 
 (deftest nrepl-server-test
   (let [service (atom nil)]
