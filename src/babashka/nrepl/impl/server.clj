@@ -14,8 +14,9 @@
 (set! *warn-on-reflection* true)
 
 (def pretty-print-fns-map
-  {'clojure.core/prn prn
-   'clojure.pprint/pprint pprint})
+  {"clojure.core/prn" prn
+   "clojure.pprint/pprint" pprint
+   "cider.nrepl.pprint/pprint" pprint})
 
 (defn eval-msg [ctx o msg {:keys [debug] :as opts}]
   (try
@@ -51,8 +52,8 @@
                 (utils/send o (utils/response-for msg
                                                   {"ns" (vars/current-ns-name)
                                                    "value" (if nrepl-pprint
-                                                             (if-let [pprint-fn (get nrepl-pprint pretty-print-fns-map)]
-                                                               (pprint-fn value)
+                                                             (if-let [pprint-fn (get pretty-print-fns-map nrepl-pprint)]
+                                                               (with-out-str (pprint-fn value))
                                                                (do
                                                                  (when debug
                                                                    (println "Pretty-Printing is only supported for clojure.core/prn and clojure.pprint/pprint."))
