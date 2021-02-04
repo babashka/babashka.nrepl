@@ -53,7 +53,7 @@
                                                   {"ns" (vars/current-ns-name)
                                                    "value" (if nrepl-pprint
                                                              (if-let [pprint-fn (get pretty-print-fns-map nrepl-pprint)]
-                                                               (pprint-fn value)
+                                                               (with-out-str (pprint-fn value))
                                                                (do
                                                                  (when debug
                                                                    (println "Pretty-Printing is only supported for clojure.core/prn and clojure.pprint/pprint."))
