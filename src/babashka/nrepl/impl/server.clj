@@ -6,11 +6,16 @@
             [clojure.string :as str]
             [sci.core :as sci]
             [sci.impl.utils :as sci-utils]
-            [sci.impl.vars :as vars])
+            [sci.impl.vars :as vars]
+            [clojure.pprint :refer [pprint]])
   (:import [java.io InputStream PushbackInputStream EOFException BufferedOutputStream]
            [java.net ServerSocket]))
 
 (set! *warn-on-reflection* true)
+
+(def pretty-print-fns-map
+  {'clojure.core/prn prn
+   'clojure.pprint/pprint pprint})
 
 (defn eval-msg [ctx o msg {:keys [debug] :as opts}]
   (try
@@ -18,7 +23,8 @@
           reader (sci/reader code-str)
           ns-str (get msg :ns)
           sci-ns (when ns-str (sci-utils/namespace-object (:env ctx) (symbol ns-str) true nil))
-          file (:file msg)]
+          file (:file msg)
+          nrepl-pprint (:nrepl.middleware.print/print msg)]
       (when debug (println "current ns" (vars/current-ns-name)))
       (sci/with-bindings (cond-> {sci/*1 *1
                                   sci/*2 *2
@@ -44,7 +50,14 @@
                 (set! *1 value)
                 (utils/send o (utils/response-for msg
                                                   {"ns" (vars/current-ns-name)
-                                                   "value" (pr-str value)}) opts)
+                                                   "value" (if nrepl-pprint
+                                                             (if-let [pprint-fn (get nrepl-pprint pretty-print-fns-map)]
+                                                               (pprint-fn value)
+                                                               (do
+                                                                 (when debug
+                                                                   (println "Pretty-Printing is only supported for clojure.core/prn and clojure.pprint/pprint."))
+                                                                 (pr-str value)))
+                                                             (pr-str value))}) opts)
                 (recur))))))
       (utils/send o (utils/response-for msg {"status" #{"done"}}) opts))
     (catch Exception ex
