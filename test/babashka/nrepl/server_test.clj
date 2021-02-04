@@ -144,7 +144,15 @@
                                      "session" session
                                      "id" (new-id!)})
           (let [reply (read-reply in session @id)]
-            (is (= "\"/tmp/foo.clj\"" (:value reply))))))
+            (is (= "\"/tmp/foo.clj\"" (:value reply)))))
+        (testing "supports print middleware for pprint"
+          (bencode/write-bencode os {"op" "eval"
+                                     "code" "{:a {:a 0} :b {:a 0} :c {:a 0 :b 1} :d {:a 0 :b 1} :e {:a 0 :b 1}}"
+                                     "nrepl.middleware.print/print" "clojure.pprint/pprint"
+                                     "session" session
+                                     "id" (new-id!)})
+          (let [reply (read-reply in session @id)]
+            (is (= "{:e {:b 1, :a 0},\n :c {:b 1, :a 0},\n :b {:a 0},\n :d {:b 1, :a 0},\n :a {:a 0}}\n" (:value reply))))))
       (testing "load-file"
         (bencode/write-bencode os {"op" "load-file" "file" "(ns foo) (defn foo [] :foo)" "session" session "id" (new-id!)})
         (read-reply in session @id)
