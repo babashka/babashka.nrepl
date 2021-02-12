@@ -260,7 +260,20 @@
                      (if (= status ["done"])
                        output
                        (recur (str output out)))))))))
-
+      (testing "output in lazy seq"
+        (bencode/write-bencode os {"op" "eval"
+                                   "code" (str '(map
+                                                 (fn [x]
+                                                   (println "It prints in client" x)
+                                                   (inc x)) [10 20]))
+                                   "session" session "id" (new-id!)})
+        (is (str/includes?
+             (loop [output ""]
+               (let [{:keys [status out]} (read-reply in session @id)]
+                 (if (= status ["done"])
+                   output
+                   (recur (str output out)))))
+             "It prints in client")))
       (testing "error"
         (bencode/write-bencode os {"op" "eval" "code" "(binding [*out* *err*] (dotimes [i 3] (println \"Hello\")))"
                                    "session" session "id" (new-id!)})
