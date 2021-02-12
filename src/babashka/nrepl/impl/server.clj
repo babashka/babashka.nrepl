@@ -3,11 +3,11 @@
    :no-doc true}
   (:require [babashka.nrepl.impl.utils :as utils]
             [bencode.core :refer [read-bencode]]
+            [clojure.pprint :refer [pprint]]
             [clojure.string :as str]
             [sci.core :as sci]
             [sci.impl.utils :as sci-utils]
-            [sci.impl.vars :as vars]
-            [clojure.pprint :refer [pprint]])
+            [sci.impl.vars :as vars])
   (:import [java.io InputStream PushbackInputStream EOFException BufferedOutputStream]
            [java.net ServerSocket]))
 
@@ -25,24 +25,24 @@
           ns-str (get msg :ns)
           sci-ns (when ns-str (sci-utils/namespace-object (:env ctx) (symbol ns-str) true nil))
           file (:file msg)
-          nrepl-pprint (:nrepl.middleware.print/print msg)]
+          nrepl-pprint (:nrepl.middleware.print/print msg)
+          out-pw (utils/replying-print-writer "out" o msg opts)
+          err-pw (utils/replying-print-writer "err" o msg opts)]
       (when debug (println "current ns" (vars/current-ns-name)))
       (sci/with-bindings (cond-> {sci/*1 *1
                                   sci/*2 *2
                                   sci/*3 *3
-                                  sci/*e *e}
+                                  sci/*e *e
+                                  sci/out out-pw
+                                  sci/err err-pw}
                            sci-ns (assoc sci/ns sci-ns)
                            file (assoc sci/file file))
         (loop []
-          (let [out-pw (utils/replying-print-writer "out" o msg opts)
-                err-pw (utils/replying-print-writer "err" o msg opts)
-                form (sci/parse-next ctx reader)
+          (let [form (sci/parse-next ctx reader)
                 eof? (identical? :sci.core/eof form)]
             (when-not eof?
               (let [value (when-not eof?
-                            (let [result (sci/with-bindings {sci/out out-pw
-                                                             sci/err err-pw}
-                                           (sci/eval-form ctx form))]
+                            (let [result (sci/eval-form ctx form)]
                               (.flush out-pw)
                               (.flush err-pw)
                               result))]
