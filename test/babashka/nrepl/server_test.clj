@@ -336,10 +336,43 @@
             (is (= "variable" type))))
         (testing "eldoc of invalid characters"
           (bencode/write-bencode os {"op" "eldoc" "ns" "user"
-                                     "sym" ""
+                                     "sym" "\r"
                                      "session" session "id" (new-id!)})
           (let [{:keys [status]} (read-reply in session @id)]
             (is (contains? (set status) "no-eldoc")))))
+      (testing "lookup"
+        (testing "lookup of inc"
+          (bencode/write-bencode os {"op" "lookup" "ns" "user"
+                                     "symbol" "inc"
+                                     "session" session "id" (new-id!)})
+          (let [{:keys [doc arglists-str]} (read-reply in session @id)]
+            (is (str/includes? doc "Returns a number one greater than num"))
+            (is (= "[[\"x\"]]" arglists-str))))
+        (testing "lookup of last-index-of"
+          (bencode/write-bencode os {"op" "lookup" "ns" "user"
+                                     "symbol" "clojure.string/last-index-of"
+                                     "session" session "id" (new-id!)})
+          (let [{:keys [doc arglists-str]} (read-reply in session @id)]
+            (is (str/includes? doc "Return last index of value (string or char) in s"))
+            (is (= "[[\"s\" \"value\"] [\"s\" \"value\" \"from-index\"]]" arglists-str))))
+        (testing "lookup of s/lower-case (from core ns, aliased as s/, core passed as ns)"
+          (bencode/write-bencode os {"op" "eval" "code" "(ns core)
+                                                         (require '[clojure.string :as s])" "session" session "id" (new-id!)})          
+          (bencode/write-bencode os {"op" "lookup" "ns" "core"
+                                     "symbol" "s/lower-case"
+                                     "session" session "id" (new-id!)})          
+          (let [{:keys [doc arglists-str]} (read-reply in session @id)]
+            (is (str/includes? doc "Converts string to all lower-case"))
+            (is (= "[[\"s\"]]" arglists-str))))
+        (testing "lookup of s/lower-case (from core ns, aliased as s/, clojure.string passed as ns)"
+          (bencode/write-bencode os {"op" "eval" "code" "(ns core)
+                                                         (require '[clojure.string :as s])" "session" session "id" (new-id!)})
+          (bencode/write-bencode os {"op" "lookup" "ns" "clojure.string"
+                                     "symbol" "s/lower-case"
+                                     "session" session "id" (new-id!)})
+          (let [{:keys [doc arglists-str]} (read-reply in session @id)]
+            (is (str/includes? doc "Converts string to all lower-case"))
+            (is (= "[[\"s\"]]" arglists-str)))))
       (testing "dynamic var can be set! if provided in :dynamic-vars option"
         (bencode/write-bencode os {"op" "eval" "code" "(set! *warn-on-reflection* true)"
                                    "session" session "id" (new-id!)})
@@ -373,3 +406,4 @@
 
 (comment
   )
+

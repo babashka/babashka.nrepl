@@ -119,9 +119,10 @@
                 completions (keep (fn [entry]
                                     (match alias->ns ns->alias query entry))
                                   svs)
-                completions (mapv (fn [[namespace name]]
-                                    {"candidate" (str name) "ns" (str namespace) #_"type" #_"function"})
-                                  completions)]
+                completions (->> (map (fn [[namespace name]]
+                                         {"candidate" (str name) "ns" (str namespace) #_"type" #_"function"})
+                                       completions)
+                                 set)]
             (when debug (prn "completions" completions))
             (utils/send o (utils/response-for msg {"completions" completions
                                                    "status" #{"done"}}) opts))
@@ -141,34 +142,50 @@
     (utils/send os (utils/response-for msg {"sessions" sessions
                                             "status" #{"done"}}) opts)))
 
-(defn eldoc [ctx msg os  {:keys [debug] :as opts}]
+(defn lookup [ctx msg os mapping-type {:keys [debug] :as opts}]
   (let [ns-str (:ns msg)
-        sym-str (:sym msg)
+        sym-str (or (:sym msg) (:symbol msg))
+        sym-str-ns-striped (last (str/split sym-str #"\/"))
         sci-ns (when ns-str
                  (sci-utils/namespace-object (:env ctx) (symbol ns-str) nil false))]
     (try
       (sci/binding [vars/current-ns (or sci-ns @vars/current-ns)]
         (let [m (sci/eval-string* ctx (format "
-(when-let [v (ns-resolve '%s '%s)]
-  (let [m (meta v)]
-    (assoc m :arglists (:arglists m)
-     :doc (:doc m)
-     :name (:name m)
-     :ns (some-> m :ns ns-name)
-     :val @v)))" ns-str sym-str))
-              reply {"ns" (:ns m)
-                     "name" (:name m)
-                     "eldoc" (mapv #(mapv str %) (:arglists m))
-                     "type" (cond
-                              (ifn? (:val m)) "function"
-                              :else "variable")
-                     "docstring" (:doc m)
-                     "status" #{"done"}}]
+(let [sym-ns-str '%s
+      sym-str '%s
+      ns-striped-sym-str '%s]
+  (when-let [v (or (ns-resolve sym-ns-str sym-str)
+                   (ns-resolve sym-ns-str ns-striped-sym-str))]
+    (let [m (meta v)]
+      (assoc m :arglists (:arglists m)
+       :doc (:doc m)
+       :name (:name m)
+       :ns (some-> m :ns ns-name)
+       :val @v))))" ns-str sym-str sym-str-ns-striped))
+              arglists-vec (mapv #(mapv str %) (:arglists m))
+              reply (->> (case mapping-type
+                           :eldoc {"ns" (:ns m)
+                                   "name" (:name m)
+                                   "eldoc" arglists-vec
+                                   "docstring" (:doc m)
+                                   "type" (cond
+                                            (ifn? (:val m)) "function"
+                                            :else "variable")
+                                   "status" #{"done"}}
+                           :lookup {"ns" (:ns m)
+                                    "name" (:name m)
+                                    "arglists-str" (str arglists-vec)
+                                    "status" #{"done"}
+                                    "doc" (:doc m)})
+                         (remove #(nil? (second %)))
+                         (into {}))]
           (utils/send os
                       (utils/response-for msg reply) opts)))
       (catch Throwable e
         (when debug (println e))
-        (utils/send os (utils/response-for msg {"status" #{"done" "no-eldoc"}}) opts)))))
+        (let [status (remove nil? #{"done"
+                                    (when (= mapping-type :eldoc) "no-eldoc")})]
+          (utils/send os (utils/response-for msg {"status" status}) opts))))))
 
 (defn read-msg [msg]
   (-> (zipmap (map keyword (keys msg))
@@ -207,6 +224,9 @@
         :complete (do
                     (complete ctx os msg opts)
                     (recur ctx is os id opts))
+        (:lookup :info) (do
+                          (lookup ctx msg os :lookup opts)
+                          (recur ctx is os id opts))
         :describe
         (do (utils/send os (utils/response-for
                             msg
@@ -214,7 +234,7 @@
                              {"status" #{"done"}
                               "ops" (zipmap #{"clone" "close" "eval" "load-file"
                                               "complete" "describe" "ls-sessions"
-                                              "eldoc"}
+                                              "eldoc" "info" "lookup"}
                                             (repeat {}))
                               "versions" {"babashka.nrepl" babashka-nrepl-version}}
                              (:describe opts))) opts)
@@ -222,7 +242,7 @@
         :ls-sessions (do (ls-sessions ctx msg os opts)
                          (recur ctx is os id opts))
         :eldoc (do
-                 (eldoc ctx msg os opts)
+                 (lookup ctx msg os :eldoc opts)
                  (recur ctx is os id opts))
         ;; fallback
         (do (when debug
