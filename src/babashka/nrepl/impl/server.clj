@@ -145,46 +145,48 @@
 (defn lookup [ctx msg os mapping-type {:keys [debug] :as opts}]
   (let [ns-str (:ns msg)
         sym-str (or (:sym msg) (:symbol msg))
-        sym-str-ns-striped (last (str/split sym-str #"\/"))
+        sym (symbol sym-str)
+        sym-name (name sym)
         sci-ns (when ns-str
                  (sci-utils/namespace-object (:env ctx) (symbol ns-str) nil false))]
     (try
       (sci/binding [vars/current-ns (or sci-ns @vars/current-ns)]
         (let [m (sci/eval-string* ctx (format "
-(let [sym-ns-str '%s
-      sym-str '%s
-      ns-striped-sym-str '%s]
-  (when-let [v (or (ns-resolve sym-ns-str sym-str)
-                   (ns-resolve sym-ns-str ns-striped-sym-str))]
+(let [ns '%s
+      full-sym '%s
+      sym-name '%s]
+  (when-let [v (ns-resolve ns full-sym)]
     (let [m (meta v)]
       (assoc m :arglists (:arglists m)
        :doc (:doc m)
        :name (:name m)
        :ns (some-> m :ns ns-name)
-       :val @v))))" ns-str sym-str sym-str-ns-striped))
+       :val @v))))" ns-str sym-str sym-name))
               arglists-vec (mapv #(mapv str %) (:arglists m))
-              reply (->> (case mapping-type
-                           :eldoc {"ns" (:ns m)
+              doc (:doc m)
+              reply (case mapping-type
+                      :eldoc (cond->
+                                 {"ns" (:ns m)
+                                  "name" (:name m)
+                                  "eldoc" arglists-vec
+                                  "type" (cond
+                                           (ifn? (:val m)) "function"
+                                           :else "variable")
+                                  "status" #{"done"}}
+                               doc (assoc "docstring" doc))
+                      :lookup (cond->
+                                  {"ns" (:ns m)
                                    "name" (:name m)
-                                   "eldoc" arglists-vec
-                                   "docstring" (:doc m)
-                                   "type" (cond
-                                            (ifn? (:val m)) "function"
-                                            :else "variable")
+                                   "arglists-str" (str arglists-vec)
                                    "status" #{"done"}}
-                           :lookup {"ns" (:ns m)
-                                    "name" (:name m)
-                                    "arglists-str" (str arglists-vec)
-                                    "status" #{"done"}
-                                    "doc" (:doc m)})
-                         (remove #(nil? (second %)))
-                         (into {}))]
+                                doc (assoc "doc" doc)))]
           (utils/send os
                       (utils/response-for msg reply) opts)))
       (catch Throwable e
         (when debug (println e))
-        (let [status (remove nil? #{"done"
-                                    (when (= mapping-type :eldoc) "no-eldoc")})]
+        (let [status (cond-> #{"done"}
+                       (= mapping-type :eldoc)
+                       (conj "no-eldoc"))]
           (utils/send os (utils/response-for msg {"status" status}) opts))))))
 
 (defn read-msg [msg]
