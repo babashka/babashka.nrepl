@@ -145,23 +145,20 @@
 (defn lookup [ctx msg os mapping-type {:keys [debug] :as opts}]
   (let [ns-str (:ns msg)
         sym-str (or (:sym msg) (:symbol msg))
-        sym (symbol sym-str)
-        sym-name (name sym)
         sci-ns (when ns-str
                  (sci-utils/namespace-object (:env ctx) (symbol ns-str) nil false))]
     (try
       (sci/binding [vars/current-ns (or sci-ns @vars/current-ns)]
         (let [m (sci/eval-string* ctx (format "
 (let [ns '%s
-      full-sym '%s
-      sym-name '%s]
+      full-sym '%s]
   (when-let [v (ns-resolve ns full-sym)]
     (let [m (meta v)]
       (assoc m :arglists (:arglists m)
        :doc (:doc m)
        :name (:name m)
        :ns (some-> m :ns ns-name)
-       :val @v))))" ns-str sym-str sym-name))
+       :val @v))))" ns-str sym-str))
               arglists-vec (mapv #(mapv str %) (:arglists m))
               doc (:doc m)
               reply (case mapping-type
