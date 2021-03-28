@@ -2,7 +2,8 @@
   {:author "Michiel Borkent"
    :no-doc true}
   (:refer-clojure :exclude [send])
-  (:require [bencode.core :refer [write-bencode]])
+  (:require [bencode.core :refer [write-bencode]]
+            [clojure.string :as str])
   (:import [java.io Writer PrintWriter StringWriter OutputStream BufferedWriter]))
 
 (set! *warn-on-reflection* true)
