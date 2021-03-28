@@ -5,6 +5,10 @@ All notable changes to this project will be documented in this file. This change
 
 ### Enhanced
 
+- Implement `cider-nrepl` `info` / `lookup` op [#30](https://github.com/babashka/babashka.nrepl/issues/30) [(@brdloush)](https://github.com/brdloush)
+
+### Enhanced
+
 - Implement pprint support [#18](https://github.com/babashka/babashka.nrepl/issues/18) ([@kolharsam](https://github.com/kolharsam), [@grazfather](https://github.com/grazfather), [@bbatsov](https://github.com/bbatsov))
 
 ## [0.0.3] - 2020-05-18
