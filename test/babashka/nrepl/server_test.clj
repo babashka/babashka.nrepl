@@ -347,14 +347,14 @@
                                        "session" session "id" (new-id!)})
             (let [{:keys [doc arglists-str]} (read-reply in session @id)]
               (is (str/includes? doc "Returns a number one greater than num"))
-              (is (= "[[\"x\"]]" arglists-str))))
+              (is (= "[x]" arglists-str))))
           (testing "lookup of last-index-of"
             (bencode/write-bencode os {"op" "lookup" "ns" "user"
                                        "symbol" "clojure.string/last-index-of"
                                        "session" session "id" (new-id!)})
             (let [{:keys [doc arglists-str]} (read-reply in session @id)]
               (is (str/includes? doc "Return last index of value (string or char) in s"))
-              (is (= "[[\"s\" \"value\"] [\"s\" \"value\" \"from-index\"]]" arglists-str))))
+              (is (= "[s value]\n[s value from-index]" arglists-str))))
           (testing "lookup of s/lower-case (from core ns, aliased as s/, core passed as ns)"
             (bencode/write-bencode os {"op" "eval" "code" "(ns core)
                                                          (require '[clojure.string :as s])" "session" session "id" (new-id!)})
@@ -363,7 +363,7 @@
                                        "session" session "id" (new-id!)})
             (let [{:keys [doc arglists-str]} (read-reply in session @id)]
               (is (str/includes? doc "Converts string to all lower-case"))
-              (is (= "[[\"s\"]]" arglists-str)))))
+              (is (= "[s]" arglists-str)))))
         (testing "dynamic var can be set! if provided in :dynamic-vars option"
           (bencode/write-bencode os {"op" "eval" "code" "(set! *warn-on-reflection* true)"
                                      "session" session "id" (new-id!)})

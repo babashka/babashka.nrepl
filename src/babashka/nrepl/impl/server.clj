@@ -142,6 +142,11 @@
     (utils/send os (utils/response-for msg {"sessions" sessions
                                             "status" #{"done"}}) opts)))
 
+
+(defn forms-join [forms]
+  (->> (map pr-str forms)
+       (str/join \newline)))
+
 (defn lookup [ctx msg os mapping-type {:keys [debug] :as opts}]
   (let [ns-str (:ns msg)
         sym-str (or (:sym msg) (:symbol msg))
@@ -159,13 +164,12 @@
        :name (:name m)
        :ns (some-> m :ns ns-name)
        :val @v))))" ns-str sym-str))
-              arglists-vec (mapv #(mapv str %) (:arglists m))
               doc (:doc m)
               reply (case mapping-type
                       :eldoc (cond->
                                  {"ns" (:ns m)
                                   "name" (:name m)
-                                  "eldoc" arglists-vec
+                                  "eldoc" (mapv #(mapv str %) (:arglists m))
                                   "type" (cond
                                            (ifn? (:val m)) "function"
                                            :else "variable")
@@ -174,7 +178,7 @@
                       :lookup (cond->
                                   {"ns" (:ns m)
                                    "name" (:name m)
-                                   "arglists-str" (str arglists-vec)
+                                   "arglists-str" (forms-join (:arglists m))
                                    "status" #{"done"}}
                                 doc (assoc "doc" doc)))]
           (utils/send os
