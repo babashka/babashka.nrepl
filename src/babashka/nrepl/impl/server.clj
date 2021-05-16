@@ -198,7 +198,7 @@
       (update :op keyword)))
 
 ;; run (bb | clojure) script/update_version.clj to update this version
-(def babashka-nrepl-version "0.0.4")
+(def babashka-nrepl-version "0.0.5-SNAPSHOT")
 
 (defn session-loop [ctx ^InputStream is os id {:keys [quiet debug] :as opts}]
   (when debug (println "Reading!" id (.available is)))

@@ -1,4 +1,4 @@
-(defproject babashka/babashka.nrepl "0.0.4"
+(defproject babashka/babashka.nrepl "0.0.5-SNAPSHOT"
   ;; run (bb | clojure) script/update_version.clj to update this version
   :description "babashka nREPL module"
   :url "https://github.com/babashka/babashka.nrepl"
