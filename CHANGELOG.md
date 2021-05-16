@@ -1,7 +1,7 @@
 # Changelog
 All notable changes to this project will be documented in this file. This changelog follows the conventions of [keepachangelog.com](http://keepachangelog.com/).
 
-## [Unreleased]
+## [0.0.4] - 2021-05-16
 
 ### Enhanced
 
