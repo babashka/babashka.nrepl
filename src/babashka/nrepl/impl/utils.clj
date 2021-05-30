@@ -3,7 +3,7 @@
    :no-doc true}
   (:refer-clojure :exclude [send])
   (:require [bencode.core :refer [write-bencode]]
-            [clojure.string :as str])
+            [sci.core :as sci])
   (:import [java.io Writer PrintWriter StringWriter OutputStream BufferedWriter]))
 
 (set! *warn-on-reflection* true)
@@ -19,11 +19,24 @@
   (.flush os))
 
 (defn send-exception [os msg ^Throwable ex {:keys [debug] :as opts}]
-  (let [ex-map (Throwable->map ex)
-        ex-name (-> ex-map :via first :type)
-        cause (:cause ex-map)]
+  (let [d (ex-data ex)
+        sci-error? (isa? (:type d) :sci/error)
+        ex-name (when sci-error?
+                  (some-> ^Throwable (ex-cause ex)
+                          .getClass .getName))
+        ex-map (Throwable->map ex)
+        cause (:cause ex-map)
+        {:keys [:file :line :column]} d
+        ns @sci/ns
+        loc-str (str ns " "
+                     (when line
+                       (str (str (or file "REPL") ":")
+                            line ":" column"")))]
     (when debug (prn "sending exception" ex-map))
-    (send os (response-for msg {"err" (str ex-name ": " cause "\n")}) opts)
+    (send os (response-for msg {"err" (str ex-name
+                                           (when cause (str ": " cause))
+                                           (when (and cause loc-str) " ")
+                                           loc-str "\n")}) opts)
     (send os (response-for msg {"ex" (str "class " ex-name)
                                 "root-ex" (str "class " ex-name)
                                 "status" #{"eval-error"}}) opts)

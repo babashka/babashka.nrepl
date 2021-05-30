@@ -367,7 +367,11 @@
         (testing "dynamic var can be set! if provided in :dynamic-vars option"
           (bencode/write-bencode os {"op" "eval" "code" "(set! *warn-on-reflection* true)"
                                      "session" session "id" (new-id!)})
-          (is (= "true" (:value (read-reply in session @id)))))))))
+          (is (= "true" (:value (read-reply in session @id)))))
+        (testing "exception value"
+          (bencode/write-bencode os {"op" "eval" "code" "(nth [] 3)"
+                                     "session" session "id" (new-id!)})
+          (is (= "java.lang.IndexOutOfBoundsExceptioncore REPL:1:1\n" (:err (read-reply in session @id)))))))))
 
 (deftest nrepl-server-test
   (let [service (atom nil)]
