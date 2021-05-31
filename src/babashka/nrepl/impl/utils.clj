@@ -35,8 +35,7 @@
     (when debug (prn "sending exception" ex-map))
     (send os (response-for msg {"err" (str ex-name
                                            (when cause (str ": " cause))
-                                           (when (and cause loc-str) " ")
-                                           loc-str "\n")}) opts)
+                                           " " loc-str "\n")}) opts)
     (send os (response-for msg {"ex" (str "class " ex-name)
                                 "root-ex" (str "class " ex-name)
                                 "status" #{"eval-error"}}) opts)
