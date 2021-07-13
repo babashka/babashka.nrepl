@@ -132,7 +132,7 @@
       (utils/send o (utils/response-for msg {"completions" []
                                              "status" #{"done"}}) opts))))
 
-(defn close-session [ctx msg _is os opts]
+(defn close-session [ctx msg os opts]
   (let [session (:session msg)]
     (swap! (:sessions ctx) disj session))
   (utils/send os (utils/response-for msg {"status" #{"done" "session-closed"}}) opts))
@@ -200,66 +200,95 @@
 ;; run (bb | clojure) script/update_version.clj to update this version
 (def babashka-nrepl-version "0.0.5-SNAPSHOT")
 
-(defn session-loop [ctx ^InputStream is os id {:keys [quiet debug] :as opts}]
-  (when debug (println "Reading!" id (.available is)))
+(defmulti process-msg
+  (fn [m]
+    (-> m :msg :op)))
+
+(defmethod process-msg :clone [{:keys [ctx msg os opts] :as m}]
+  (when (:debug opts) (println "Cloning!"))
+  (let [id (str (java.util.UUID/randomUUID))]
+    (swap! (:sessions ctx) (fnil conj #{}) id)
+    (utils/send os (utils/response-for msg {"new-session" id "status" #{"done"}}) opts)))
+
+(defmethod process-msg :close [{:keys [ctx msg os opts]}]
+  (close-session ctx msg os opts))
+
+(defmethod process-msg :eval [{:keys [ctx os msg opts]}]
+  (eval-msg ctx os msg opts))
+
+(defmethod process-msg :load-file [{:keys [ctx os msg opts]}]
+  (let [file (:file msg)
+        msg (assoc msg :code file)]
+    (eval-msg ctx os msg opts)))
+
+(defmethod process-msg :complete [{:keys [ctx os msg opts]}]
+  (complete ctx os msg opts))
+
+(defmethod process-msg :lookup [{:keys [ctx msg os opts]}]
+  (lookup ctx msg os :lookup opts))
+
+(defmethod process-msg :info [{:keys [ctx msg os opts]}]
+  (lookup ctx msg os :lookup opts))
+
+(defmethod process-msg :describe [{:keys [os msg opts]}]
+  (utils/send os (utils/response-for
+                  msg
+                  (merge-with merge
+                              {"status" #{"done"}
+                               "ops" (zipmap #{"clone" "close" "eval" "load-file"
+                                               "complete" "describe" "ls-sessions"
+                                               "eldoc" "info" "lookup"}
+                                             (repeat {}))
+                               "versions" {"babashka.nrepl" babashka-nrepl-version}}
+                              (:describe opts))) opts))
+
+(defmethod process-msg :ls-sessions [{:keys [ctx msg os opts]}]
+  (ls-sessions ctx msg os opts))
+
+(defmethod process-msg :eldoc [{:keys [ctx msg os opts]}]
+  (lookup ctx msg os :eldoc opts))
+
+(defmethod process-msg :default [{:keys [opts os msg]}]
+  (when (:debug opts)
+    (println "Unhandled message" msg))
+  (utils/send os (utils/response-for msg {"status" #{"error" "unknown-op" "done"}}) opts))
+
+(defn session-loop [rf is os {:keys [ctx opts id] :as m} ]
+  (when (:debug opts) (println "Reading!" id (.available ^InputStream is)))
   (when-let [msg (try (read-bencode is)
                       (catch EOFException _
-                        (when-not quiet
+                        (when-not (:quiet opts)
                           (println "Client closed connection."))))]
-    (let [msg (read-msg msg)]
-      (when debug (prn "Received" msg))
-      (case (get msg :op)
-        :clone (do
-                 (when debug (println "Cloning!"))
-                 (let [id (str (java.util.UUID/randomUUID))]
-                   (swap! (:sessions ctx) (fnil conj #{}) id)
-                   (utils/send os (utils/response-for msg {"new-session" id "status" #{"done"}}) opts)
-                   (recur ctx is os id opts)))
-        :close (do (close-session ctx msg is os opts)
-                   (recur ctx is os id opts))
-        :eval (do
-                (eval-msg ctx os msg opts)
-                (recur ctx is os id opts))
-        :load-file (let [file (:file msg)
-                         msg (assoc msg :code file)]
-                     (eval-msg ctx os msg opts)
-                     (recur ctx is os id opts))
-        :complete (do
-                    (complete ctx os msg opts)
-                    (recur ctx is os id opts))
-        (:lookup :info) (do
-                          (lookup ctx msg os :lookup opts)
-                          (recur ctx is os id opts))
-        :describe
-        (do (utils/send os (utils/response-for
-                            msg
-                            (merge-with merge
-                             {"status" #{"done"}
-                              "ops" (zipmap #{"clone" "close" "eval" "load-file"
-                                              "complete" "describe" "ls-sessions"
-                                              "eldoc" "info" "lookup"}
-                                            (repeat {}))
-                              "versions" {"babashka.nrepl" babashka-nrepl-version}}
-                             (:describe opts))) opts)
-            (recur ctx is os id opts))
-        :ls-sessions (do (ls-sessions ctx msg os opts)
-                         (recur ctx is os id opts))
-        :eldoc (do
-                 (lookup ctx msg os :eldoc opts)
-                 (recur ctx is os id opts))
-        ;; fallback
-        (do (when debug
-              (println "Unhandled message" msg))
-            (utils/send os (utils/response-for msg {"status" #{"error" "unknown-op" "done"}}) opts)
-            (recur ctx is os id opts))))))
+    (let [response (rf os {:msg msg
+                           :os os
+                           :opts opts
+                           :ctx ctx})]
+      ;; response currently unused.
+      ;; potentially refactor so that instead of doing I/O within middleware,
+      ;; return data that writes to os
+      )
+    (recur rf is os m)))
 
-(defn listen [ctx ^ServerSocket listener {:keys [debug thread-bind] :as opts}]
+(def wrap-read-msg
+  (map (fn [m]
+         (update m :msg read-msg))))
+
+(def wrap-process-message
+  (map process-msg))
+
+(def default-xform
+  (comp wrap-read-msg
+        wrap-process-message))
+
+(defn listen [ctx ^ServerSocket listener {:keys [debug thread-bind xform] :as opts}]
   (when debug (println "Listening"))
   (let [client-socket (.accept listener)
         in (.getInputStream client-socket)
         in (PushbackInputStream. in)
         out (.getOutputStream client-socket)
-        out (BufferedOutputStream. out)]
+        out (BufferedOutputStream. out)
+        xform (or xform default-xform)
+        rf (xform #(do %2))]
     (when debug (println "Connected."))
     (sci/future
       (binding [*1 nil
@@ -274,5 +303,7 @@
                   sci/*3 nil
                   sci/*e nil}
                  (zipmap thread-bind (map deref thread-bind)))
-          (session-loop ctx in out "pre-init" opts))))
+          (session-loop rf in out {:opts opts
+                                   :id "pre-init"
+                                   :ctx ctx}))))
     (recur ctx listener opts)))
