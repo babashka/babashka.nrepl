@@ -5,9 +5,7 @@
             [bencode.core :refer [read-bencode]]
             [clojure.pprint :refer [pprint]]
             [clojure.string :as str]
-            [sci.core :as sci]
-            [sci.impl.utils :as sci-utils]
-            [sci.impl.vars :as vars])
+            [sci.core :as sci])
   (:import [java.io InputStream PushbackInputStream EOFException BufferedOutputStream]
            [java.net ServerSocket]))
 
@@ -18,17 +16,20 @@
    "clojure.pprint/pprint" pprint
    "cider.nrepl.pprint/pprint" pprint})
 
+(defn the-sci-ns [ctx ns-sym]
+  (sci/eval-form ctx (list 'clojure.core/the-ns (list 'quote ns-sym))))
+
 (defn eval-msg [ctx o msg {:keys [debug] :as opts}]
   (try
     (let [code-str (get msg :code)
           reader (sci/reader code-str)
           ns-str (get msg :ns)
-          sci-ns (when ns-str (sci-utils/namespace-object (:env ctx) (symbol ns-str) true nil))
+          sci-ns (when ns-str (the-sci-ns ctx (symbol ns-str)))
           file (:file msg)
           nrepl-pprint (:nrepl.middleware.print/print msg)
           out-pw (utils/replying-print-writer "out" o msg opts)
           err-pw (utils/replying-print-writer "err" o msg opts)]
-      (when debug (println "current ns" (vars/current-ns-name)))
+      (when debug (println "current ns" (str @sci/ns)))
       (sci/with-bindings (cond-> {sci/*1 *1
                                   sci/*2 *2
                                   sci/*3 *3
@@ -50,7 +51,7 @@
                 (set! *2 *1)
                 (set! *1 value)
                 (utils/send o (utils/response-for msg
-                                                  {"ns" (vars/current-ns-name)
+                                                  {"ns" (str @sci/ns)
                                                    "value" (if nrepl-pprint
                                                              (if-let [pprint-fn (get pretty-print-fns-map nrepl-pprint)]
                                                                (with-out-str (pprint-fn value))
@@ -86,8 +87,8 @@
   (try
     (let [ns-str (get msg :ns)
           sci-ns (when ns-str
-                   (sci-utils/namespace-object (:env ctx) (symbol ns-str) nil false))]
-      (sci/binding [vars/current-ns (or sci-ns @vars/current-ns)]
+                   (the-sci-ns ctx (symbol ns-str)))]
+      (sci/binding [sci/ns (or sci-ns @sci/ns)]
         (if-let [query (or (:symbol msg)
                            (:prefix msg))]
           (let [has-namespace? (str/includes? query "/")
@@ -106,8 +107,8 @@
                                                   syms)))
                                          (keys alias->ns)))
                 all-namespaces (->> (sci/eval-string* ctx (format "(all-ns)"))
-                                    (map (fn [sym]
-                                           [(str (.-name ^sci.impl.vars.SciNamespace sym)) nil :qualified])))
+                                    (map (fn [ns]
+                                           [(str ns) nil :qualified])))
                 fully-qualified-names (when has-namespace?
                                         (let [fqns (symbol (first (str/split query #"/")))
                                               ns (get alias->ns fqns fqns)
@@ -151,9 +152,9 @@
   (let [ns-str (:ns msg)
         sym-str (or (:sym msg) (:symbol msg))
         sci-ns (when ns-str
-                 (sci-utils/namespace-object (:env ctx) (symbol ns-str) nil false))]
+                 (the-sci-ns ctx (symbol ns-str)))]
     (try
-      (sci/binding [vars/current-ns (or sci-ns @vars/current-ns)]
+      (sci/binding [sci/ns (or sci-ns @sci/ns)]
         (let [m (sci/eval-string* ctx (format "
 (let [ns '%s
       full-sym '%s]
