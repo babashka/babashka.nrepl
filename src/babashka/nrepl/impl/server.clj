@@ -19,13 +19,27 @@
 (defn the-sci-ns [ctx ns-sym]
   (sci/eval-form ctx (list 'clojure.core/the-ns (list 'quote ns-sym))))
 
+(defn format-value [nrepl-pprint debug v]
+  (if nrepl-pprint
+    (if-let [pprint-fn (get pretty-print-fns-map nrepl-pprint)]
+      (with-out-str (pprint-fn v))
+      (do
+        (when debug
+          (println "Pretty-Printing is only supported for clojure.core/prn and clojure.pprint/pprint."))
+        (pr-str v)))
+    (pr-str v)))
+
 (defn eval-msg [ctx o msg {:keys [debug] :as opts}]
   (try
     (let [code-str (get msg :code)
+          load-file? (:load-file msg)
+          file (if load-file?
+                 (or (:file-path msg)
+                     (:file-name msg))
+                 (:file msg))
           reader (sci/reader code-str)
           ns-str (get msg :ns)
           sci-ns (when ns-str (the-sci-ns ctx (symbol ns-str)))
-          file (:file msg)
           nrepl-pprint (:nrepl.middleware.print/print msg)
           out-pw (utils/replying-print-writer "out" o msg opts)
           err-pw (utils/replying-print-writer "err" o msg opts)]
@@ -36,31 +50,31 @@
                                   sci/*e *e
                                   sci/out out-pw
                                   sci/err err-pw}
-                           sci-ns (assoc sci/ns sci-ns)
-                           file (assoc sci/file file))
-        (loop []
-          (let [form (sci/parse-next ctx reader)
-                eof? (identical? :sci.core/eof form)]
-            (when-not eof?
-              (let [value (when-not eof?
-                            (let [result (sci/eval-form ctx form)]
-                              (.flush out-pw)
-                              (.flush err-pw)
-                              result))]
-                (set! *3 *2)
-                (set! *2 *1)
-                (set! *1 value)
-                (utils/send o (utils/response-for msg
-                                                  {"ns" (str @sci/ns)
-                                                   "value" (if nrepl-pprint
-                                                             (if-let [pprint-fn (get pretty-print-fns-map nrepl-pprint)]
-                                                               (with-out-str (pprint-fn value))
-                                                               (do
-                                                                 (when debug
-                                                                   (println "Pretty-Printing is only supported for clojure.core/prn and clojure.pprint/pprint."))
-                                                                 (pr-str value)))
-                                                             (pr-str value))}) opts)
-                (recur))))))
+                           file (assoc sci/file file)
+                           load-file? (assoc sci/ns @sci/ns)
+                           sci-ns (assoc sci/ns sci-ns))
+        (let [last-val
+              (loop [last-val nil]
+                (let [form (sci/parse-next ctx reader)
+                      eof? (identical? :sci.core/eof form)]
+                  (if-not eof?
+                    (let [value (when-not eof?
+                                  (let [result (sci/eval-form ctx form)]
+                                    (.flush out-pw)
+                                    (.flush err-pw)
+                                    result))]
+                      (when-not load-file?
+                        (set! *3 *2)
+                        (set! *2 *1)
+                        (set! *1 value)
+                        (utils/send o (utils/response-for msg
+                                                          {"ns" (str @sci/ns)
+                                                           "value" (format-value nrepl-pprint debug value)}) opts))
+                      (recur value))
+                    last-val)))]
+          (when load-file?
+            (utils/send o (utils/response-for msg
+                                              {"value" (format-value nrepl-pprint debug last-val)}) opts))))
       (utils/send o (utils/response-for msg {"status" #{"done"}}) opts))
     (catch Exception ex
       (set! *e ex)
@@ -121,8 +135,8 @@
                                     (match alias->ns ns->alias query entry))
                                   svs)
                 completions (->> (map (fn [[namespace name]]
-                                         {"candidate" (str name) "ns" (str namespace) #_"type" #_"function"})
-                                       completions)
+                                        {"candidate" (str name) "ns" (str namespace) #_"type" #_"function"})
+                                      completions)
                                  set)]
             (when debug (prn "completions" completions))
             (utils/send o (utils/response-for msg {"completions" completions
@@ -222,7 +236,11 @@
                 (eval-msg ctx os msg opts)
                 (recur ctx is os id opts))
         :load-file (let [file (:file msg)
-                         msg (assoc msg :code file)]
+                         msg (assoc msg
+                                    :code file
+                                    :file-path (:file-path msg)
+                                    :file-name (:file-name msg)
+                                    :load-file true)]
                      (eval-msg ctx os msg opts)
                      (recur ctx is os id opts))
         :complete (do
@@ -235,13 +253,13 @@
         (do (utils/send os (utils/response-for
                             msg
                             (merge-with merge
-                             {"status" #{"done"}
-                              "ops" (zipmap #{"clone" "close" "eval" "load-file"
-                                              "complete" "describe" "ls-sessions"
-                                              "eldoc" "info" "lookup"}
-                                            (repeat {}))
-                              "versions" {"babashka.nrepl" babashka-nrepl-version}}
-                             (:describe opts))) opts)
+                                        {"status" #{"done"}
+                                         "ops" (zipmap #{"clone" "close" "eval" "load-file"
+                                                         "complete" "describe" "ls-sessions"
+                                                         "eldoc" "info" "lookup"}
+                                                       (repeat {}))
+                                         "versions" {"babashka.nrepl" babashka-nrepl-version}}
+                                        (:describe opts))) opts)
             (recur ctx is os id opts))
         :ls-sessions (do (ls-sessions ctx msg os opts)
                          (recur ctx is os id opts))

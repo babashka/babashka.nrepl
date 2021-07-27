@@ -156,8 +156,14 @@
             (let [reply (read-reply in session @id)]
               (is (= "{:e {:b 1, :a 0},\n :c {:b 1, :a 0},\n :b {:a 0},\n :d {:b 1, :a 0},\n :a {:a 0}}\n" (:value reply))))))
         (testing "load-file"
-          (bencode/write-bencode os {"op" "load-file" "file" "(ns foo) (defn foo [] :foo)" "session" session "id" (new-id!)})
+          ;; make sure we are in the user ns
+          (bencode/write-bencode os {"op" "eval" "code" "(ns user)" "session" session "id" (new-id!)})
           (read-reply in session @id)
+          (bencode/write-bencode os {"op" "load-file" "file" "(ns foo) (defn foo [] :foo) 123" "session" session "id" (new-id!)})
+          (is (= "123" (:value (read-reply in session @id))))
+          (bencode/write-bencode os {"op" "eval" "code" "(ns-name *ns*)" "session" session "id" (new-id!)})
+          (testing "load-file didn't change the current ns"
+            (is (= "user" (:value (read-reply in session @id)))))
           (bencode/write-bencode os {"op" "eval" "code" "(foo)" "ns" "foo" "session" session "id" (new-id!)})
           (is (= ":foo" (:value (read-reply in session @id)))))
         (testing "complete"
