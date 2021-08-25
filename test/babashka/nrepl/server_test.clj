@@ -2,6 +2,7 @@
   {:author "Michiel Borkent"}
   (:require [babashka.nrepl.impl.server :refer [babashka-nrepl-version]]
             [babashka.nrepl.server :as server]
+            [babashka.nrepl.middleware :as middleware]
             [babashka.nrepl.test-utils :as test-utils]
             [bencode.core :as bencode]
             [clojure.edn :as edn]
@@ -396,6 +397,113 @@
   (is (= 1668 (:port (server/parse-opt "1668"))))
   (is (= 1668 (:port (server/parse-opt "localhost:1668"))))
   (is (= "localhost" (:host (server/parse-opt "localhost:1668")))))
+
+
+(defn server-responses [ctx bindings opts xform requests]
+  (sci/with-bindings
+    bindings
+    @(transduce (comp
+                 (map (fn [msg]
+                        {:msg msg
+                         :ctx ctx
+                         :opts opts}))
+                 xform)
+                (fn [responses response]
+                  (swap! responses conj response)
+                  responses)
+                (atom [])
+                requests)))
+
+(defn next-response [ctx bindings opts xform msg]
+  (sci/with-bindings
+    bindings
+    ((xform #(do %2)) nil {:msg msg
+                           :ctx ctx
+                           :opts opts})))
+
+(defn test-server-config []
+  (let [opts {}
+        ctx (-> (sci/init opts)
+                (assoc :sessions (atom #{})))
+        bindings {sci/ns (sci/create-ns 'user nil)
+                  sci/print-length @sci/print-length
+                  sci/*1 nil
+                  sci/*2 nil
+                  sci/*3 nil
+                  sci/*e nil}]
+    {:ctx ctx
+     :bindings bindings
+     :opts opts}))
+
+(deftest nrepl-middleware
+  (let [cfg (test-server-config)
+        response (partial next-response
+                          (:ctx cfg)
+                          (:bindings cfg)
+                          (:opts cfg))
+        responses (partial server-responses
+                           (:ctx cfg)
+                           (:bindings cfg)
+                           (:opts cfg))]
+    (testing "default-middleware"
+      (let [m (response middleware/default-xform {"op" "clone"})
+            session (-> m :response (get "new-session"))
+            id (atom 0)
+            new-id! #(swap! id inc)]
+        (is session)
+        (let [id (new-id!)
+              ms (responses
+                  middleware/default-xform
+                  [(assoc {"op" "eval"
+                           "code" "(prn \"yay\")(+ 41 1)"}
+                          "session" session
+                          "id" id)])]
+          (is (every? #{session}
+                      (map #(-> % :response (get "session")) ms))
+              "Returns correct session")
+
+          (is (every? #{id}
+                      (map #(-> % :response (get "id")) ms))
+              "Returns correct id"))))
+
+    (testing "extend middleware"
+      (let [with-foo-op (fn [rf]
+                          (let [builtin (middleware/wrap-process-message rf)]
+                            (completing
+                             (fn [result {:keys [ctx msg opts] :as m}]
+                               (if (= :foo (:op msg))
+                                 (rf result {:opts opts
+                                             :response {:foo 42}})
+                                 (builtin result m))))))
+
+            xform (comp middleware/wrap-read-msg
+                        with-foo-op
+                        middleware/wrap-stdio->stream)
+            m (response xform {"op" "clone"})
+            session (-> m :response (get "new-session"))
+            id (atom 0)
+            new-id! #(swap! id inc)]
+        (is session)
+        (let [id (new-id!)
+              ms (responses xform
+                            [(assoc {"op" "eval"
+                                     "code" "(prn \"yay\")(+ 41 1)"}
+                                    "session" session
+                                    "id" id)])]
+          (is (every? #{session}
+                      (map #(-> % :response (get "session")) ms))
+              "Returns correct session")
+
+          (is (every? #{id}
+                      (map #(-> % :response (get "id")) ms))
+              "Returns correct id"))
+        (is {:foo 42}
+            (-> (response xform
+                          (assoc {"op" "foo"}
+                                 "session" session
+                                 "id" (new-id!)))
+                :response))))))
+
 
 ;;;; Scratch
 
