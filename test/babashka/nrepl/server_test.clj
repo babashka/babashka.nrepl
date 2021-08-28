@@ -399,7 +399,26 @@
   (is (= "localhost" (:host (server/parse-opt "localhost:1668")))))
 
 
-(defn server-responses [ctx bindings opts xform requests]
+(defn test-server-config
+  "Returns sample config suitable for testing middleware."
+  []
+  (let [opts {}
+        ctx (-> (sci/init opts)
+                (assoc :sessions (atom #{})))
+        bindings {sci/ns (sci/create-ns 'user nil)
+                  sci/print-length @sci/print-length
+                  sci/*1 nil
+                  sci/*2 nil
+                  sci/*3 nil
+                  sci/*e nil}]
+    {:ctx ctx
+     :bindings bindings
+     :opts opts}))
+
+(defn server-responses
+  "Given a sci context, bindings, and opts returns a vector of outputs produced by
+  consuming with requests with xform."
+  [ctx bindings opts xform requests]
   (sci/with-bindings
     bindings
     @(transduce (comp
@@ -414,26 +433,17 @@
                 (atom [])
                 requests)))
 
-(defn next-response [ctx bindings opts xform msg]
+(defn next-response
+  "Given a sci context, bindings, and opts return the next output produced by
+  consuming msg with xform."
+  [ctx bindings opts xform msg]
   (sci/with-bindings
     bindings
     ((xform #(do %2)) nil {:msg msg
                            :ctx ctx
                            :opts opts})))
 
-(defn test-server-config []
-  (let [opts {}
-        ctx (-> (sci/init opts)
-                (assoc :sessions (atom #{})))
-        bindings {sci/ns (sci/create-ns 'user nil)
-                  sci/print-length @sci/print-length
-                  sci/*1 nil
-                  sci/*2 nil
-                  sci/*3 nil
-                  sci/*e nil}]
-    {:ctx ctx
-     :bindings bindings
-     :opts opts}))
+
 
 (deftest nrepl-middleware
   (let [cfg (test-server-config)

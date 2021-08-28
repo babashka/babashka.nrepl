@@ -5,10 +5,12 @@
 
 
 (def wrap-read-msg
+  "Middleware for normalizing an nrepl message read from bencode."
   (map (fn [m]
          (update m :msg server/read-msg))))
 
 (defn wrap-process-message
+  "Middleware for producing responses based on op code."
   [rf]
   (completing
    (fn [result input]
@@ -23,6 +25,7 @@
     :else x))
 
 (defn wrap-stdio->stdio
+  "Middleware for writing stdout messages to stdout."
   [rf]
   (completing
    (fn [result input]
@@ -47,6 +50,8 @@
        (rf result input)))))
 
 (defn wrap-stdio->stream
+  "Middleware for capturing asynchronous stdout/stderr messages and
+  emitting nrepl messages for out and err."
   [rf]
   (completing
    (fn [result input]
@@ -69,6 +74,7 @@
        (rf result input)))))
 
 (def default-xform
+  "Default middleware used by sci nrepl server."
   (comp wrap-read-msg
         wrap-process-message
         wrap-stdio->stream))
