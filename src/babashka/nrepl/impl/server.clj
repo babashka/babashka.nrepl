@@ -8,7 +8,7 @@
             [sci.core :as sci]
             [sci.impl.utils :as sci-utils]
             [sci.impl.vars :as vars])
-  (:import [java.io InputStream PushbackInputStream PrintWriter EOFException BufferedOutputStream BufferedWriter Writer]
+  (:import [java.io InputStream PushbackInputStream PrintWriter EOFException BufferedOutputStream BufferedWriter Writer StringWriter]
            [java.net ServerSocket]))
 
 (set! *warn-on-reflection* true)
@@ -18,23 +18,34 @@
    "clojure.pprint/pprint" pprint
    "cider.nrepl.pprint/pprint" pprint})
 
-(defn make-stream []
-  (let [callback (atom
-                      (fn
-                        ([x])
-                        ([x off len])))
+(defn- to-char-array
+  ^chars
+  [x]
+  (cond
+    (string? x) (.toCharArray ^String x)
+    (integer? x) (char-array [(char x)])
+    :else x))
 
-        pw (-> (proxy [Writer] []
-                     (write
-                       ([x]
-                        (@callback x))
-                       ([x off len]
-                        (@callback x off len)))
-                     (flush [])
-                     (close []))
-                   (BufferedWriter. 1024)
-                   (PrintWriter. true))]
-    [callback pw]))
+(defn make-writer [rf result msg stream-key]
+  (let [pw (-> (proxy [Writer] []
+                 (write
+                   ([x]
+                    (let [cbuf (to-char-array x)]
+                      (.write ^Writer this cbuf (int 0) (count cbuf))))
+                   ([x off len]
+                    (let [cbuf (to-char-array x)
+                          text (str (doto (StringWriter.)
+                                      (.write cbuf ^int off ^int len)))]
+                      (when (pos? (count text))
+                        (rf result
+                            {:response
+                             (utils/response-for msg
+                                                 {stream-key text})})))))
+                 (flush [])
+                 (close []))
+               (BufferedWriter. 1024)
+               (PrintWriter. true))]
+    pw))
 
 (defn eval-msg [rf result {:keys [ctx msg opts]}]
   (let [current-result (volatile! result)]
@@ -48,22 +59,8 @@
             nrepl-pprint (:nrepl.middleware.print/print msg)
             _ (when debug (println "current ns" (vars/current-ns-name)))
 
-            [err-callback err-pw] (make-stream)
-            [out-callback out-pw] (make-stream)]
-        (vreset!
-         current-result
-         (rf @current-result
-             {:start-stream :err
-              :session (:session msg)
-              :callback err-callback
-              :id (:id msg)}))
-        (vreset!
-         current-result
-         (rf @current-result
-             {:start-stream :out
-              :session (:session msg)
-              :callback out-callback
-              :id (:id msg)}))
+            err-pw (make-writer rf result msg "err")
+            out-pw (make-writer rf result msg "out")]
 
         (sci/with-bindings (cond-> {sci/*1 *1
                                     sci/*2 *2

@@ -487,8 +487,7 @@
                                  (builtin result m))))))
 
             xform (comp middleware/wrap-read-msg
-                        with-foo-op
-                        middleware/wrap-stdio->stream)
+                        with-foo-op)
             m (response xform {"op" "clone"})
             session (-> m :response (get "new-session"))
             id (atom 0)
