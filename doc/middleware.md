@@ -94,3 +94,8 @@ The most common types of middleware are implementing extra nrepl ops and cross-c
                                               :xform xform})
 
 ```
+
+## Advanced usage
+
+Since middleware for babashka's nrepl is just a transducer, any transducer that produces nrepl responses for nrepl requests can be used. As a convenience, the default middleware is provided so that the transducer doesn't have to be built from scratch. The set of transducers can be found in the middleware namespace under `babashka.nrepl.middleware/default-middleware`. The `default-middleware` can be turned into a transducer using `babashka.nrepl.middleware/middleware->xform`. The benefit of using `middleware->xform` is that any transducers that have the meta data of `:babashka.nrepl.middleware/requires` or `:babashka.nrepl.middleware/expects` will be respected and the order of the transducers will be sorted accordingly.
+
