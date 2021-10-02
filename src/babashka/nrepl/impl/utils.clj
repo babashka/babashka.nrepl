@@ -41,34 +41,3 @@
                                 "status" #{"eval-error"}}) opts)
     (send os (response-for msg {"status" #{"done"}}) opts)))
 
-;; from https://github.com/nrepl/nrepl/blob/1cc9baae631703c184894559a2232275dc50dff6/src/clojure/nrepl/middleware/print.clj#L63
-(defn- to-char-array
-  ^chars
-  [x]
-  (cond
-    (string? x) (.toCharArray ^String x)
-    (integer? x) (char-array [(char x)])
-    :else x))
-
-;; from https://github.com/nrepl/nrepl/blob/1cc9baae631703c184894559a2232275dc50dff6/src/clojure/nrepl/middleware/print.clj#L99
-(defn replying-print-writer
-  "Returns a `java.io.PrintWriter` suitable for binding as `*out*` or `*err*`. All
-  of the content written to that `PrintWriter` will be sent as messages on the
-  transport of `msg`, keyed by `key`."
-  ^java.io.PrintWriter
-  [key o msg opts]
-  (-> (proxy [Writer] []
-        (write
-          ([x]
-           (let [cbuf (to-char-array x)]
-             (.write ^Writer this cbuf (int 0) (count cbuf))))
-          ([x off len]
-           (let [cbuf (to-char-array x)
-                 text (str (doto (StringWriter.)
-                             (.write cbuf ^int off ^int len)))]
-             (when (pos? (count text))
-               (send o (response-for msg {key text}) opts)))))
-        (flush [])
-        (close []))
-      (BufferedWriter. 1024)
-      (PrintWriter. true)))

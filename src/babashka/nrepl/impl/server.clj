@@ -38,9 +38,8 @@
                                       (.write cbuf ^int off ^int len)))]
                       (when (pos? (count text))
                         (rf result
-                            {:response
-                             (utils/response-for msg
-                                                 {stream-key text})})))))
+                            {:response-for msg
+                             :response {stream-key text}})))))
                  (flush [])
                  (close []))
                (BufferedWriter. 1024)
@@ -85,26 +84,27 @@
                   (vreset!
                    current-result
                    (rf @current-result
-                       {:response (utils/response-for msg
-                                                      {"ns" (vars/current-ns-name)
-                                                       "value" (if nrepl-pprint
-                                                                 (if-let [pprint-fn (get pretty-print-fns-map nrepl-pprint)]
-                                                                   (with-out-str (pprint-fn value))
-                                                                   (do
-                                                                     (when debug
-                                                                       (println "Pretty-Printing is only supported for clojure.core/prn and clojure.pprint/pprint."))
-                                                                     (pr-str value)))
-                                                                 (pr-str value))})
+                       {:response-for msg
+                        :response {"ns" (vars/current-ns-name)
+                                   "value" (if nrepl-pprint
+                                             (if-let [pprint-fn (get pretty-print-fns-map nrepl-pprint)]
+                                               (with-out-str (pprint-fn value))
+                                               (do
+                                                 (when debug
+                                                   (println "Pretty-Printing is only supported for clojure.core/prn and clojure.pprint/pprint."))
+                                                 (pr-str value)))
+                                             (pr-str value))}
                         :opts opts}))
                   (recur))))))
         (vreset!
          current-result
-         (rf @current-result {:response (utils/response-for msg {"status" #{"done"}})
+         (rf @current-result {:response {"status" #{"done"}}
+                              :response-for msg
                               :opts opts})))
       (catch Exception ex
         (set! *e ex)
         (rf @current-result
-            {:msg msg
+            {:response-for msg
              :ex ex
              :opts opts})))))
 
@@ -169,31 +169,36 @@
                                    set)]
               (when debug (prn "completions" completions))
               (rf result
-                  {:response (utils/response-for msg {"completions" completions
-                                                      "status" #{"done"}})
+                  {:response {"completions" completions
+                              "status" #{"done"}}
+                   :response-for msg
                    :opts opts}))
             (rf result
-                {:response (utils/response-for msg {"status" #{"done"}})
+                {:response {"status" #{"done"}}
+                 :response-for msg
                  :opts opts}))))
       (catch Throwable e
         (println e)
         (rf result
-            {:response (utils/response-for msg {"completions" []
-                                                "status" #{"done"}})
+            {:response {"completions" []
+                        "status" #{"done"}}
+             :response-for msg
              :opts opts})))))
 
 (defn close-session [rf result {:keys [ctx msg opts]}]
   (let [session (:session msg)]
     (swap! (:sessions ctx) disj session))
   (rf result
-      {:response (utils/response-for msg {"status" #{"done" "session-closed"}})
+      {:response {"status" #{"done" "session-closed"}}
+       :response-for msg
        :opts opts}))
 
 (defn ls-sessions [rf result {:keys [ctx msg opts]}]
   (let [sessions @(:sessions ctx)]
     (rf result
-        {:response (utils/response-for msg {"sessions" sessions
-                                            "status" #{"done"}})
+        {:response {"sessions" sessions
+                    "status" #{"done"}}
+         :response-for msg
          :opts opts})))
 
 (defn forms-join [forms]
@@ -236,7 +241,8 @@
                                            "arglists-str" (forms-join (:arglists m))
                                            "status" #{"done"}}
                                         doc (assoc "doc" doc)))]
-          (rf result {:response (utils/response-for msg reply)
+          (rf result {:response reply
+                      :response-for msg
                       :opts opts})))
       (catch Throwable e
         (when debug (println e))
@@ -244,7 +250,8 @@
                        (= mapping-type :eldoc)
                        (conj "no-eldoc"))]
           (rf result
-              {:response (utils/response-for msg {"status" status})
+              {:response {"status" status}
+               :response-for msg
                :opts opts}))))))
 
 (defn read-msg [msg]
@@ -265,7 +272,8 @@
   (when (:debug opts) (println "Cloning!"))
   (let [id (str (java.util.UUID/randomUUID))]
     (swap! (:sessions ctx) (fnil conj #{}) id)
-    (rf result {:response (utils/response-for msg {"new-session" id "status" #{"done"}})
+    (rf result {:response {"new-session" id "status" #{"done"}}
+                :response-for msg
                 :opts opts})))
 
 (defmethod process-msg :close [rf result {:keys [ctx msg opts] :as m}]
@@ -289,16 +297,15 @@
   (lookup rf result m))
 
 (defmethod process-msg :describe [rf result {:keys [msg opts] :as m}]
-  (rf result {:response (utils/response-for
-                         msg
-                         (merge-with merge
-                                     {"status" #{"done"}
-                                      "ops" (zipmap #{"clone" "close" "eval" "load-file"
-                                                      "complete" "describe" "ls-sessions"
-                                                      "eldoc" "info" "lookup"}
-                                                    (repeat {}))
-                                      "versions" {"babashka.nrepl" babashka-nrepl-version}}
-                                     (:describe opts)))
+  (rf result {:response (merge-with merge
+                                    {"status" #{"done"}
+                                     "ops" (zipmap #{"clone" "close" "eval" "load-file"
+                                                     "complete" "describe" "ls-sessions"
+                                                     "eldoc" "info" "lookup"}
+                                                   (repeat {}))
+                                     "versions" {"babashka.nrepl" babashka-nrepl-version}}
+                                    (:describe opts))
+              :response-for msg
               :opts opts}))
 
 (defmethod process-msg :ls-sessions [rf result m]
@@ -311,7 +318,8 @@
   (when (:debug opts)
     (println "Unhandled message" msg))
   (rf result
-      {:response (utils/response-for msg {"status" #{"error" "unknown-op" "done"}})
+      {:response {"status" #{"error" "unknown-op" "done"}}
+       :response-for msg
        :opts opts}))
 
 (defn session-loop [rf is os {:keys [ctx opts id] :as m} ]
@@ -327,7 +335,7 @@
 
 (defn send-reduce [os response]
   (if-let [ex (:ex response)]
-    (utils/send-exception os (:msg response) ex (:opts response))
+    (utils/send-exception os (:response-for response) ex (:opts response))
     (utils/send os (:response response) (:opts response)))
   os)
 
