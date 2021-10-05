@@ -90,8 +90,8 @@
                   (if-not eof?
                     (let [value (when-not eof?
                                   (let [result (sci/eval-form ctx form)]
-                                    (.flush out-pw)
-                                    (.flush err-pw)
+                                    (.flush ^Writer out-pw)
+                                    (.flush ^Writer err-pw)
                                     result))]
                       (when-not load-file?
                         (set! *3 *2)
