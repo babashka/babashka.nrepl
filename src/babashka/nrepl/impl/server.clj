@@ -5,10 +5,8 @@
             [bencode.core :refer [read-bencode]]
             [clojure.pprint :refer [pprint]]
             [clojure.string :as str]
-            [sci.core :as sci]
-            [sci.impl.utils :as sci-utils]
-            [sci.impl.vars :as vars])
-  (:import [java.io InputStream PushbackInputStream PrintWriter EOFException BufferedOutputStream BufferedWriter Writer StringWriter]
+            [sci.core :as sci])
+  (:import [java.io InputStream PushbackInputStream EOFException BufferedOutputStream PrintWriter BufferedWriter Writer StringWriter]
            [java.net ServerSocket]))
 
 (set! *warn-on-reflection* true)
@@ -46,67 +44,81 @@
                (PrintWriter. true))]
     pw))
 
+(defn the-sci-ns [ctx ns-sym]
+  (sci/eval-form ctx (list 'clojure.core/the-ns (list 'quote ns-sym))))
+
+(defn format-value [nrepl-pprint debug v]
+  (if nrepl-pprint
+    (if-let [pprint-fn (get pretty-print-fns-map nrepl-pprint)]
+      (with-out-str (pprint-fn v))
+      (do
+        (when debug
+          (println "Pretty-Printing is only supported for clojure.core/prn and clojure.pprint/pprint."))
+        (pr-str v)))
+    (pr-str v)))
+
 (defn eval-msg [rf result {:keys [ctx msg opts]}]
-  (let [current-result (volatile! result)]
-    (try
-      (let [code-str (get msg :code)
-            reader (sci/reader code-str)
-            ns-str (get msg :ns)
-            sci-ns (when ns-str (sci-utils/namespace-object (:env ctx) (symbol ns-str) true nil))
-            file (:file msg)
-            debug (:debug opts)
-            nrepl-pprint (:nrepl.middleware.print/print msg)
-            _ (when debug (println "current ns" (vars/current-ns-name)))
+  (try
+    (let [debug (:debug opts)
+          code-str (get msg :code)
+          load-file? (:load-file msg)
+          file (if load-file?
+                 (or (:file-path msg)
+                     (:file-name msg))
+                 (:file msg))
+          reader (sci/reader code-str)
+          ns-str (get msg :ns)
+          sci-ns (when ns-str (the-sci-ns ctx (symbol ns-str)))
+          nrepl-pprint (:nrepl.middleware.print/print msg)
 
-            err-pw (make-writer rf result msg "err")
-            out-pw (make-writer rf result msg "out")]
-
-        (sci/with-bindings (cond-> {sci/*1 *1
-                                    sci/*2 *2
-                                    sci/*3 *3
-                                    sci/*e *e
-                                    sci/out out-pw
-                                    sci/err err-pw}
-                             sci-ns (assoc sci/ns sci-ns)
-                             file (assoc sci/file file))
-          (loop []
-            (let [form (sci/parse-next ctx reader)
-                  eof? (identical? :sci.core/eof form)]
-              (when-not eof?
-                (let [value (when-not eof?
-                              (let [eval-result (sci/eval-form ctx form)]
-                                (.flush ^java.io.Flushable out-pw)
-                                (.flush ^java.io.Flushable err-pw)
-                                eval-result))]
-                  (set! *3 *2)
-                  (set! *2 *1)
-                  (set! *1 value)
-                  (vreset!
-                   current-result
-                   (rf @current-result
-                       {:response-for msg
-                        :response {"ns" (vars/current-ns-name)
-                                   "value" (if nrepl-pprint
-                                             (if-let [pprint-fn (get pretty-print-fns-map nrepl-pprint)]
-                                               (with-out-str (pprint-fn value))
-                                               (do
-                                                 (when debug
-                                                   (println "Pretty-Printing is only supported for clojure.core/prn and clojure.pprint/pprint."))
-                                                 (pr-str value)))
-                                             (pr-str value))}
-                        :opts opts}))
-                  (recur))))))
-        (vreset!
-         current-result
-         (rf @current-result {:response {"status" #{"done"}}
-                              :response-for msg
-                              :opts opts})))
-      (catch Exception ex
-        (set! *e ex)
-        (rf @current-result
-            {:response-for msg
-             :ex ex
-             :opts opts})))))
+          err-pw (make-writer rf result msg "err")
+          out-pw (make-writer rf result msg "out")]
+      (when debug (println "current ns" (str @sci/ns)))
+      (sci/with-bindings (cond-> {sci/*1 *1
+                                  sci/*2 *2
+                                  sci/*3 *3
+                                  sci/*e *e
+                                  sci/out out-pw
+                                  sci/err err-pw}
+                           file (assoc sci/file file)
+                           load-file? (assoc sci/ns @sci/ns)
+                           sci-ns (assoc sci/ns sci-ns))
+        (let [last-val
+              (loop [last-val nil]
+                (let [form (sci/parse-next ctx reader)
+                      eof? (identical? :sci.core/eof form)]
+                  (if-not eof?
+                    (let [value (when-not eof?
+                                  (let [result (sci/eval-form ctx form)]
+                                    (.flush out-pw)
+                                    (.flush err-pw)
+                                    result))]
+                      (when-not load-file?
+                        (set! *3 *2)
+                        (set! *2 *1)
+                        (set! *1 value)
+                        (rf result
+                            {:response-for msg
+                             :response {"ns" (str @sci/ns)
+                                        "value" (format-value nrepl-pprint debug value)}
+                             :opts opts}))
+                      (recur value))
+                    last-val)))]
+          (when load-file?
+            (rf result
+                {:response-for msg
+                 :response {"value" (format-value nrepl-pprint debug last-val)}
+                 :opts opts}))))
+      (rf result
+          {:response-for msg
+           :response {"status" #{"done"}}
+           :opts opts}))
+    (catch Exception ex
+      (set! *e ex)
+      (rf result
+          {:response-for msg
+           :ex ex
+           :opts opts}))))
 
 (defn fully-qualified-syms [ctx ns-sym]
   (let [syms (sci/eval-string* ctx (format "(keys (ns-map '%s))" ns-sym))
@@ -126,64 +138,64 @@
                 [sym-ns (str sym-ns "/" sym-name)]))))))
 
 (defn complete [rf result {:keys [ctx msg opts]}]
-  (let [debug (:debug ctx)]
-    (try
-      (let [ns-str (get msg :ns)
-            sci-ns (when ns-str
-                     (sci-utils/namespace-object (:env ctx) (symbol ns-str) nil false))]
-        (sci/binding [vars/current-ns (or sci-ns @vars/current-ns)]
-          (if-let [query (or (:symbol msg)
-                             (:prefix msg))]
-            (let [has-namespace? (str/includes? query "/")
-                  from-current-ns (fully-qualified-syms ctx (sci/eval-string* ctx "(ns-name *ns*)"))
-                  from-current-ns (map (fn [sym]
-                                         [(namespace sym) (name sym) :unqualified])
-                                       from-current-ns)
-                  alias->ns (sci/eval-string* ctx "(let [m (ns-aliases *ns*)] (zipmap (keys m) (map ns-name (vals m))))")
-                  ns->alias (zipmap (vals alias->ns) (keys alias->ns))
-                  from-aliased-nss (doall (mapcat
-                                           (fn [alias]
-                                             (let [ns (get alias->ns alias)
-                                                   syms (sci/eval-string* ctx (format "(keys (ns-publics '%s))" ns))]
-                                               (map (fn [sym]
-                                                      [(str ns) (str sym) :qualified])
-                                                    syms)))
-                                           (keys alias->ns)))
-                  all-namespaces (->> (sci/eval-string* ctx (format "(all-ns)"))
-                                      (map (fn [sym]
-                                             [(str (.-name ^sci.impl.vars.SciNamespace sym)) nil :qualified])))
-                  fully-qualified-names (when has-namespace?
-                                          (let [fqns (symbol (first (str/split query #"/")))
-                                                ns (get alias->ns fqns fqns)
-                                                syms (sci/eval-string* ctx (format "(keys (ns-publics '%s))" ns))]
-                                            (map (fn [sym]
-                                                   [(str ns) (str sym) :qualified])
-                                                 syms)))
-                  svs (concat from-current-ns from-aliased-nss all-namespaces fully-qualified-names)
-                  completions (keep (fn [entry]
-                                      (match alias->ns ns->alias query entry))
-                                    svs)
-                  completions (->> (map (fn [[namespace name]]
-                                          {"candidate" (str name) "ns" (str namespace) #_"type" #_"function"})
-                                        completions)
-                                   set)]
-              (when debug (prn "completions" completions))
-              (rf result
-                  {:response {"completions" completions
-                              "status" #{"done"}}
-                   :response-for msg
-                   :opts opts}))
+  (try
+    (let [ns-str (get msg :ns)
+          sci-ns (when ns-str
+                   (the-sci-ns ctx (symbol ns-str)))]
+      (sci/binding [sci/ns (or sci-ns @sci/ns)]
+        (if-let [query (or (:symbol msg)
+                           (:prefix msg))]
+          (let [has-namespace? (str/includes? query "/")
+                from-current-ns (fully-qualified-syms ctx (sci/eval-string* ctx "(ns-name *ns*)"))
+                from-current-ns (map (fn [sym]
+                                       [(namespace sym) (name sym) :unqualified])
+                                     from-current-ns)
+                alias->ns (sci/eval-string* ctx "(let [m (ns-aliases *ns*)] (zipmap (keys m) (map ns-name (vals m))))")
+                ns->alias (zipmap (vals alias->ns) (keys alias->ns))
+                from-aliased-nss (doall (mapcat
+                                         (fn [alias]
+                                           (let [ns (get alias->ns alias)
+                                                 syms (sci/eval-string* ctx (format "(keys (ns-publics '%s))" ns))]
+                                             (map (fn [sym]
+                                                    [(str ns) (str sym) :qualified])
+                                                  syms)))
+                                         (keys alias->ns)))
+                all-namespaces (->> (sci/eval-string* ctx (format "(all-ns)"))
+                                    (map (fn [ns]
+                                           [(str ns) nil :qualified])))
+                fully-qualified-names (when has-namespace?
+                                        (let [fqns (symbol (first (str/split query #"/")))
+                                              ns (get alias->ns fqns fqns)
+                                              syms (sci/eval-string* ctx (format "(keys (ns-publics '%s))" ns))]
+                                          (map (fn [sym]
+                                                 [(str ns) (str sym) :qualified])
+                                               syms)))
+                svs (concat from-current-ns from-aliased-nss all-namespaces fully-qualified-names)
+                completions (keep (fn [entry]
+                                    (match alias->ns ns->alias query entry))
+                                  svs)
+                completions (->> (map (fn [[namespace name]]
+                                        {"candidate" (str name) "ns" (str namespace) #_"type" #_"function"})
+                                      completions)
+                                 set)]
+            (when (:debug opts) (prn "completions" completions))
             (rf result
-                {:response {"status" #{"done"}}
-                 :response-for msg
-                 :opts opts}))))
-      (catch Throwable e
-        (println e)
-        (rf result
-            {:response {"completions" []
-                        "status" #{"done"}}
-             :response-for msg
-             :opts opts})))))
+                {:response-for msg
+                 :response {"completions" completions
+                            "status" #{"done"}}
+                 :opts opts}))
+          (rf result
+              {:response-for msg
+               :response {"status" #{"done"}}
+               :opts opts}))))
+    (catch Throwable e
+      (println e)
+      (rf result
+          {:response-for msg
+           :response {"completions" []
+                      "status" #{"done"}}
+           :opts opts}))))
+
 
 (defn close-session [rf result {:keys [ctx msg opts]}]
   (let [session (:session msg)]
@@ -211,9 +223,9 @@
         mapping-type (-> msg :op)
         debug (:debug opts)
         sci-ns (when ns-str
-                 (sci-utils/namespace-object (:env ctx) (symbol ns-str) nil false))]
+                 (the-sci-ns ctx (symbol ns-str)))]
     (try
-      (sci/binding [vars/current-ns (or sci-ns @vars/current-ns)]
+      (sci/binding [sci/ns (or sci-ns @sci/ns)]
         (let [m (sci/eval-string* ctx (format "
 (let [ns '%s
       full-sym '%s]
@@ -284,8 +296,12 @@
 
 (defmethod process-msg :load-file [rf result {:keys [ctx msg opts] :as m}]
   (let [file (:file msg)
-        msg (assoc msg :code file)]
-    (eval-msg rf result (assoc-in m [:msg :code] (:file msg)))))
+        msg (assoc msg
+                   :code file
+                   :file-path (:file-path msg)
+                   :file-name (:file-name msg)
+                   :load-file true)]
+    (eval-msg rf result (assoc m :msg msg))))
 
 (defmethod process-msg :complete [rf result {:keys [ctx msg opts] :as m}]
   (complete rf result m))
