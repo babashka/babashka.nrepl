@@ -274,7 +274,7 @@
       (update :op keyword)))
 
 ;; run (bb | clojure) script/update_version.clj to update this version
-(def babashka-nrepl-version "0.0.5")
+(def babashka-nrepl-version "0.0.6-SNAPSHOT")
 
 (defmulti process-msg
   (fn [rf result m]
