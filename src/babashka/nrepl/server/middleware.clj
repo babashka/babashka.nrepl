@@ -1,4 +1,4 @@
-(ns babashka.nrepl.middleware
+(ns babashka.nrepl.server.middleware
   (:require [babashka.nrepl.impl.server :as server]
             clojure.set))
 
@@ -53,8 +53,8 @@
               (let [vmeta (meta v)
                     requires (::requires vmeta)
                     expects (::expects vmeta)]
-                (assert (seqable? requires) ":babashka.nrepl.middleware/requires must be seqable")
-                (assert (seqable? expects) ":babashka.nrepl.middleware/expects must be seqable")
+                (assert (seqable? requires) ":babashka.nrepl.server.middleware/requires must be seqable")
+                (assert (seqable? expects) ":babashka.nrepl.server.middleware/expects must be seqable")
                 (assert (every? #(contains? middleware %)
                                 (concat requires
                                         expects))
@@ -93,7 +93,7 @@
   that can be used with the sci nrepl server.
 
   Middleware functions will topologically sorted based off the
-  meta data keys :babashka.nrepl.middleware/requires and :babashka.nrepl.middleware/expects.
+  meta data keys :babashka.nrepl.server.middleware/requires and :babashka.nrepl.middleware/expects.
   "
   [middleware]
   (let [g (middleware->graph middleware)

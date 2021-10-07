@@ -1,7 +1,7 @@
 (ns babashka.nrepl.server
   {:author "Michiel Borkent"}
   (:require [babashka.nrepl.impl.server :as server]
-            [babashka.nrepl.middleware :as middleware]
+            [babashka.nrepl.server.middleware :as middleware]
             [clojure.string :as string]
             [sci.core :as sci])
   (:import [java.net ServerSocket]))

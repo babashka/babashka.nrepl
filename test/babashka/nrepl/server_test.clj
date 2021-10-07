@@ -2,7 +2,7 @@
   {:author "Michiel Borkent"}
   (:require [babashka.nrepl.impl.server :refer [babashka-nrepl-version]]
             [babashka.nrepl.server :as server]
-            [babashka.nrepl.middleware :as middleware]
+            [babashka.nrepl.server.middleware :as middleware]
             [babashka.nrepl.test-utils :as test-utils]
             [bencode.core :as bencode]
             [clojure.edn :as edn]
