@@ -316,6 +316,12 @@
               (let [eldoc (read-eldoc eldoc)]
                 (is (= '((x)) eldoc))
                 (is (= "function" type)))))
+          (testing "issue-45"
+            (bencode/write-bencode os {"op" "eldoc" "ns" "non-existing-ns"
+                                       "sym" "->>"
+                                       "session" session "id" (new-id!)})
+            (let [{:keys [status]} (read-reply in session @id)]
+              (is (= ["no-eldoc" "done"] status))))
           (testing "user-defined macro"
             (bencode/write-bencode os {"op" "eval"
                                        "ns" "user"

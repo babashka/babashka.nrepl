@@ -221,12 +221,12 @@
   (let [ns-str (:ns msg)
         sym-str (or (:sym msg) (:symbol msg))
         mapping-type (-> msg :op)
-        debug (:debug opts)
-        sci-ns (when ns-str
-                 (the-sci-ns ctx (symbol ns-str)))]
+        debug (:debug opts)]
     (try
-      (sci/binding [sci/ns (or sci-ns @sci/ns)]
-        (let [m (sci/eval-string* ctx (format "
+      (let [sci-ns (when ns-str
+                     (the-sci-ns ctx (symbol ns-str)))]
+        (sci/binding [sci/ns (or sci-ns @sci/ns)]
+          (let [m (sci/eval-string* ctx (format "
 (let [ns '%s
       full-sym '%s]
   (when-let [v (ns-resolve ns full-sym)]
@@ -236,26 +236,26 @@
        :name (:name m)
        :ns (some-> m :ns ns-name)
        :val @v))))" ns-str sym-str))
-              doc (:doc m)
-              reply (case mapping-type
-                      :eldoc (cond->
-                                 {"ns" (:ns m)
-                                  "name" (:name m)
-                                  "eldoc" (mapv #(mapv str %) (:arglists m))
-                                  "type" (cond
-                                           (ifn? (:val m)) "function"
-                                           :else "variable")
-                                  "status" #{"done"}}
-                               doc (assoc "docstring" doc))
-                      (:info :lookup) (cond->
-                                          {"ns" (:ns m)
-                                           "name" (:name m)
-                                           "arglists-str" (forms-join (:arglists m))
-                                           "status" #{"done"}}
-                                        doc (assoc "doc" doc)))]
-          (rf result {:response reply
-                      :response-for msg
-                      :opts opts})))
+                doc (:doc m)
+                reply (case mapping-type
+                        :eldoc (cond->
+                                   {"ns" (:ns m)
+                                    "name" (:name m)
+                                    "eldoc" (mapv #(mapv str %) (:arglists m))
+                                    "type" (cond
+                                             (ifn? (:val m)) "function"
+                                             :else "variable")
+                                    "status" #{"done"}}
+                                 doc (assoc "docstring" doc))
+                        (:info :lookup) (cond->
+                                            {"ns" (:ns m)
+                                             "name" (:name m)
+                                             "arglists-str" (forms-join (:arglists m))
+                                             "status" #{"done"}}
+                                          doc (assoc "doc" doc)))]
+            (rf result {:response reply
+                        :response-for msg
+                        :opts opts}))))
       (catch Throwable e
         (when debug (println e))
         (let [status (cond-> #{"done"}
