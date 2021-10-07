@@ -6,7 +6,7 @@
             [clojure.pprint :refer [pprint]]
             [clojure.string :as str]
             [sci.core :as sci])
-  (:import [java.io InputStream PushbackInputStream EOFException BufferedOutputStream]
+  (:import [java.io InputStream PushbackInputStream EOFException BufferedOutputStream PrintWriter BufferedWriter Writer StringWriter]
            [java.net ServerSocket]))
 
 (set! *warn-on-reflection* true)
@@ -15,6 +15,34 @@
   {"clojure.core/prn" prn
    "clojure.pprint/pprint" pprint
    "cider.nrepl.pprint/pprint" pprint})
+
+(defn- to-char-array
+  ^chars
+  [x]
+  (cond
+    (string? x) (.toCharArray ^String x)
+    (integer? x) (char-array [(char x)])
+    :else x))
+
+(defn make-writer [rf result msg stream-key]
+  (let [pw (-> (proxy [Writer] []
+                 (write
+                   ([x]
+                    (let [cbuf (to-char-array x)]
+                      (.write ^Writer this cbuf (int 0) (count cbuf))))
+                   ([x off len]
+                    (let [cbuf (to-char-array x)
+                          text (str (doto (StringWriter.)
+                                      (.write cbuf ^int off ^int len)))]
+                      (when (pos? (count text))
+                        (rf result
+                            {:response-for msg
+                             :response {stream-key text}})))))
+                 (flush [])
+                 (close []))
+               (BufferedWriter. 1024)
+               (PrintWriter. true))]
+    pw))
 
 (defn the-sci-ns [ctx ns-sym]
   (sci/eval-form ctx (list 'clojure.core/the-ns (list 'quote ns-sym))))
@@ -29,9 +57,10 @@
         (pr-str v)))
     (pr-str v)))
 
-(defn eval-msg [ctx o msg {:keys [debug] :as opts}]
+(defn eval-msg [rf result {:keys [ctx msg opts]}]
   (try
-    (let [code-str (get msg :code)
+    (let [debug (:debug opts)
+          code-str (get msg :code)
           load-file? (:load-file msg)
           file (if load-file?
                  (or (:file-path msg)
@@ -41,8 +70,9 @@
           ns-str (get msg :ns)
           sci-ns (when ns-str (the-sci-ns ctx (symbol ns-str)))
           nrepl-pprint (:nrepl.middleware.print/print msg)
-          out-pw (utils/replying-print-writer "out" o msg opts)
-          err-pw (utils/replying-print-writer "err" o msg opts)]
+
+          err-pw (make-writer rf result msg "err")
+          out-pw (make-writer rf result msg "out")]
       (when debug (println "current ns" (str @sci/ns)))
       (sci/with-bindings (cond-> {sci/*1 *1
                                   sci/*2 *2
@@ -60,25 +90,35 @@
                   (if-not eof?
                     (let [value (when-not eof?
                                   (let [result (sci/eval-form ctx form)]
-                                    (.flush out-pw)
-                                    (.flush err-pw)
+                                    (.flush ^Writer out-pw)
+                                    (.flush ^Writer err-pw)
                                     result))]
                       (when-not load-file?
                         (set! *3 *2)
                         (set! *2 *1)
                         (set! *1 value)
-                        (utils/send o (utils/response-for msg
-                                                          {"ns" (str @sci/ns)
-                                                           "value" (format-value nrepl-pprint debug value)}) opts))
+                        (rf result
+                            {:response-for msg
+                             :response {"ns" (str @sci/ns)
+                                        "value" (format-value nrepl-pprint debug value)}
+                             :opts opts}))
                       (recur value))
                     last-val)))]
           (when load-file?
-            (utils/send o (utils/response-for msg
-                                              {"value" (format-value nrepl-pprint debug last-val)}) opts))))
-      (utils/send o (utils/response-for msg {"status" #{"done"}}) opts))
+            (rf result
+                {:response-for msg
+                 :response {"value" (format-value nrepl-pprint debug last-val)}
+                 :opts opts}))))
+      (rf result
+          {:response-for msg
+           :response {"status" #{"done"}}
+           :opts opts}))
     (catch Exception ex
       (set! *e ex)
-      (utils/send-exception o msg ex opts))))
+      (rf result
+          {:response-for msg
+           :ex ex
+           :opts opts}))))
 
 (defn fully-qualified-syms [ctx ns-sym]
   (let [syms (sci/eval-string* ctx (format "(keys (ns-map '%s))" ns-sym))
@@ -97,7 +137,7 @@
               (when (re-find pat (str sym-ns "/" sym-name))
                 [sym-ns (str sym-ns "/" sym-name)]))))))
 
-(defn complete [ctx o msg {:keys [debug] :as opts}]
+(defn complete [rf result {:keys [ctx msg opts]}]
   (try
     (let [ns-str (get msg :ns)
           sci-ns (when ns-str
@@ -138,33 +178,50 @@
                                         {"candidate" (str name) "ns" (str namespace) #_"type" #_"function"})
                                       completions)
                                  set)]
-            (when debug (prn "completions" completions))
-            (utils/send o (utils/response-for msg {"completions" completions
-                                                   "status" #{"done"}}) opts))
-          (utils/send o (utils/response-for msg {"status" #{"done"}}) opts))))
+            (when (:debug opts) (prn "completions" completions))
+            (rf result
+                {:response-for msg
+                 :response {"completions" completions
+                            "status" #{"done"}}
+                 :opts opts}))
+          (rf result
+              {:response-for msg
+               :response {"status" #{"done"}}
+               :opts opts}))))
     (catch Throwable e
       (println e)
-      (utils/send o (utils/response-for msg {"completions" []
-                                             "status" #{"done"}}) opts))))
+      (rf result
+          {:response-for msg
+           :response {"completions" []
+                      "status" #{"done"}}
+           :opts opts}))))
 
-(defn close-session [ctx msg _is os opts]
+
+(defn close-session [rf result {:keys [ctx msg opts]}]
   (let [session (:session msg)]
     (swap! (:sessions ctx) disj session))
-  (utils/send os (utils/response-for msg {"status" #{"done" "session-closed"}}) opts))
+  (rf result
+      {:response {"status" #{"done" "session-closed"}}
+       :response-for msg
+       :opts opts}))
 
-(defn ls-sessions [ctx msg os opts]
+(defn ls-sessions [rf result {:keys [ctx msg opts]}]
   (let [sessions @(:sessions ctx)]
-    (utils/send os (utils/response-for msg {"sessions" sessions
-                                            "status" #{"done"}}) opts)))
-
+    (rf result
+        {:response {"sessions" sessions
+                    "status" #{"done"}}
+         :response-for msg
+         :opts opts})))
 
 (defn forms-join [forms]
   (->> (map pr-str forms)
        (str/join \newline)))
 
-(defn lookup [ctx msg os mapping-type {:keys [debug] :as opts}]
+(defn lookup [rf result {:keys [ctx msg opts]}]
   (let [ns-str (:ns msg)
-        sym-str (or (:sym msg) (:symbol msg))]
+        sym-str (or (:sym msg) (:symbol msg))
+        mapping-type (-> msg :op)
+        debug (:debug opts)]
     (try
       (let [sci-ns (when ns-str
                      (the-sci-ns ctx (symbol ns-str)))]
@@ -190,20 +247,24 @@
                                              :else "variable")
                                     "status" #{"done"}}
                                  doc (assoc "docstring" doc))
-                        :lookup (cond->
-                                    {"ns" (:ns m)
-                                     "name" (:name m)
-                                     "arglists-str" (forms-join (:arglists m))
-                                     "status" #{"done"}}
-                                  doc (assoc "doc" doc)))]
-            (utils/send os
-                        (utils/response-for msg reply) opts))))
+                        (:info :lookup) (cond->
+                                            {"ns" (:ns m)
+                                             "name" (:name m)
+                                             "arglists-str" (forms-join (:arglists m))
+                                             "status" #{"done"}}
+                                          doc (assoc "doc" doc)))]
+            (rf result {:response reply
+                        :response-for msg
+                        :opts opts}))))
       (catch Throwable e
         (when debug (println e))
         (let [status (cond-> #{"done"}
                        (= mapping-type :eldoc)
                        (conj "no-eldoc"))]
-          (utils/send os (utils/response-for msg {"status" status}) opts))))))
+          (rf result
+              {:response {"status" status}
+               :response-for msg
+               :opts opts}))))))
 
 (defn read-msg [msg]
   (-> (zipmap (map keyword (keys msg))
@@ -215,70 +276,93 @@
 ;; run (bb | clojure) script/update_version.clj to update this version
 (def babashka-nrepl-version "0.0.5-SNAPSHOT")
 
-(defn session-loop [ctx ^InputStream is os id {:keys [quiet debug] :as opts}]
-  (when debug (println "Reading!" id (.available is)))
+(defmulti process-msg
+  (fn [rf result m]
+    (-> m :msg :op)))
+
+(defmethod process-msg :clone [rf result {:keys [ctx msg opts] :as m}]
+  (when (:debug opts) (println "Cloning!"))
+  (let [id (str (java.util.UUID/randomUUID))]
+    (swap! (:sessions ctx) (fnil conj #{}) id)
+    (rf result {:response {"new-session" id "status" #{"done"}}
+                :response-for msg
+                :opts opts})))
+
+(defmethod process-msg :close [rf result {:keys [ctx msg opts] :as m}]
+  (close-session rf result m))
+
+(defmethod process-msg :eval [rf result m]
+  (eval-msg rf result m))
+
+(defmethod process-msg :load-file [rf result {:keys [ctx msg opts] :as m}]
+  (let [file (:file msg)
+        msg (assoc msg
+                   :code file
+                   :file-path (:file-path msg)
+                   :file-name (:file-name msg)
+                   :load-file true)]
+    (eval-msg rf result (assoc m :msg msg))))
+
+(defmethod process-msg :complete [rf result {:keys [ctx msg opts] :as m}]
+  (complete rf result m))
+
+(defmethod process-msg :lookup [rf result m]
+  (lookup rf result m))
+
+(defmethod process-msg :info [rf result m]
+  (lookup rf result m))
+
+(defmethod process-msg :describe [rf result {:keys [msg opts] :as m}]
+  (rf result {:response (merge-with merge
+                                    {"status" #{"done"}
+                                     "ops" (zipmap #{"clone" "close" "eval" "load-file"
+                                                     "complete" "describe" "ls-sessions"
+                                                     "eldoc" "info" "lookup"}
+                                                   (repeat {}))
+                                     "versions" {"babashka.nrepl" babashka-nrepl-version}}
+                                    (:describe opts))
+              :response-for msg
+              :opts opts}))
+
+(defmethod process-msg :ls-sessions [rf result m]
+  (ls-sessions rf result m))
+
+(defmethod process-msg :eldoc [rf result m]
+  (lookup rf result m))
+
+(defmethod process-msg :default [rf result {:keys [opts msg]}]
+  (when (:debug opts)
+    (println "Unhandled message" msg))
+  (rf result
+      {:response {"status" #{"error" "unknown-op" "done"}}
+       :response-for msg
+       :opts opts}))
+
+(defn session-loop [rf is os {:keys [ctx opts id] :as m} ]
+  (when (:debug opts) (println "Reading!" id (.available ^InputStream is)))
   (when-let [msg (try (read-bencode is)
                       (catch EOFException _
-                        (when-not quiet
+                        (when-not (:quiet opts)
                           (println "Client closed connection."))))]
-    (let [msg (read-msg msg)]
-      (when debug (prn "Received" msg))
-      (case (get msg :op)
-        :clone (do
-                 (when debug (println "Cloning!"))
-                 (let [id (str (java.util.UUID/randomUUID))]
-                   (swap! (:sessions ctx) (fnil conj #{}) id)
-                   (utils/send os (utils/response-for msg {"new-session" id "status" #{"done"}}) opts)
-                   (recur ctx is os id opts)))
-        :close (do (close-session ctx msg is os opts)
-                   (recur ctx is os id opts))
-        :eval (do
-                (eval-msg ctx os msg opts)
-                (recur ctx is os id opts))
-        :load-file (let [file (:file msg)
-                         msg (assoc msg
-                                    :code file
-                                    :file-path (:file-path msg)
-                                    :file-name (:file-name msg)
-                                    :load-file true)]
-                     (eval-msg ctx os msg opts)
-                     (recur ctx is os id opts))
-        :complete (do
-                    (complete ctx os msg opts)
-                    (recur ctx is os id opts))
-        (:lookup :info) (do
-                          (lookup ctx msg os :lookup opts)
-                          (recur ctx is os id opts))
-        :describe
-        (do (utils/send os (utils/response-for
-                            msg
-                            (merge-with merge
-                                        {"status" #{"done"}
-                                         "ops" (zipmap #{"clone" "close" "eval" "load-file"
-                                                         "complete" "describe" "ls-sessions"
-                                                         "eldoc" "info" "lookup"}
-                                                       (repeat {}))
-                                         "versions" {"babashka.nrepl" babashka-nrepl-version}}
-                                        (:describe opts))) opts)
-            (recur ctx is os id opts))
-        :ls-sessions (do (ls-sessions ctx msg os opts)
-                         (recur ctx is os id opts))
-        :eldoc (do
-                 (lookup ctx msg os :eldoc opts)
-                 (recur ctx is os id opts))
-        ;; fallback
-        (do (when debug
-              (println "Unhandled message" msg))
-            (utils/send os (utils/response-for msg {"status" #{"error" "unknown-op" "done"}}) opts)
-            (recur ctx is os id opts))))))
+    (let [response (rf os {:msg msg
+                           :opts opts
+                           :ctx ctx})])
+    (recur rf is os m)))
 
-(defn listen [ctx ^ServerSocket listener {:keys [debug thread-bind] :as opts}]
+(defn send-reduce [os response]
+  (if-let [ex (:ex response)]
+    (utils/send-exception os (:response-for response) ex (:opts response))
+    (utils/send os (:response response) (:opts response)))
+  os)
+
+(defn listen [ctx ^ServerSocket listener {:keys [debug thread-bind xform] :as opts}]
   (when debug (println "Listening"))
   (let [client-socket (.accept listener)
         in (.getInputStream client-socket)
         in (PushbackInputStream. in)
         out (.getOutputStream client-socket)
-        out (BufferedOutputStream. out)]
+        out (BufferedOutputStream. out)
+        rf (xform send-reduce)]
     (when debug (println "Connected."))
     (sci/future
       (binding [*1 nil
@@ -293,5 +377,7 @@
                   sci/*3 nil
                   sci/*e nil}
                  (zipmap thread-bind (map deref thread-bind)))
-          (session-loop ctx in out "pre-init" opts))))
+          (session-loop rf in out {:opts opts
+                                   :id "pre-init"
+                                   :ctx ctx}))))
     (recur ctx listener opts)))

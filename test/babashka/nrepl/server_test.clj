@@ -2,6 +2,7 @@
   {:author "Michiel Borkent"}
   (:require [babashka.nrepl.impl.server :refer [babashka-nrepl-version]]
             [babashka.nrepl.server :as server]
+            [babashka.nrepl.server.middleware :as middleware]
             [babashka.nrepl.test-utils :as test-utils]
             [bencode.core :as bencode]
             [clojure.edn :as edn]
@@ -409,6 +410,190 @@
   (is (= 1668 (:port (server/parse-opt "1668"))))
   (is (= 1668 (:port (server/parse-opt "localhost:1668"))))
   (is (= "localhost" (:host (server/parse-opt "localhost:1668")))))
+
+
+(defn test-server-config
+  "Returns sample config suitable for testing middleware."
+  []
+  (let [opts {}
+        ctx (-> (sci/init opts)
+                (assoc :sessions (atom #{})))
+        bindings {sci/ns (sci/create-ns 'user nil)
+                  sci/print-length @sci/print-length
+                  sci/*1 nil
+                  sci/*2 nil
+                  sci/*3 nil
+                  sci/*e nil}]
+    {:ctx ctx
+     :bindings bindings
+     :opts opts}))
+
+(defn server-responses
+  "Given a sci context, bindings, and opts returns a vector of outputs produced by
+  consuming with requests with xform."
+  [ctx bindings opts xform requests]
+  (sci/with-bindings
+    bindings
+    @(transduce (comp
+                 (map (fn [msg]
+                        {:msg msg
+                         :ctx ctx
+                         :opts opts}))
+                 xform)
+                (fn [responses response]
+                  (swap! responses conj response)
+                  responses)
+                (atom [])
+                requests)))
+
+(defn next-response
+  "Given a sci context, bindings, and opts return the next output produced by
+  consuming msg with xform."
+  [ctx bindings opts xform msg]
+  (sci/with-bindings
+    bindings
+    ((xform #(do %2)) nil {:msg msg
+                           :ctx ctx
+                           :opts opts})))
+
+
+
+(defonce responses-log (atom []))
+(def
+  ^{::middleware/requires #{#'middleware/wrap-response-for}}
+  log-responses
+  (map (fn [response]
+         (swap! responses-log conj (:response response))
+         response)))
+
+(defonce requests-log (atom [] ))
+(def
+  ^{::middleware/requires #{#'middleware/wrap-read-msg}
+    ::middleware/expects #{#'middleware/wrap-process-message}}
+  log-requests
+  (map (fn [request]
+         (swap! requests-log conj (:msg request))
+         request)))
+
+(deftest nrepl-middleware
+  (let [cfg (test-server-config)
+        response (partial next-response
+                          (:ctx cfg)
+                          (:bindings cfg)
+                          (:opts cfg))
+        responses (partial server-responses
+                           (:ctx cfg)
+                           (:bindings cfg)
+                           (:opts cfg))]
+    (testing "default-middleware"
+      (let [m (response middleware/default-xform {"op" "clone"})
+            session (-> m :response (get "new-session"))
+            id (atom 0)
+            new-id! #(swap! id inc)]
+        (is session)
+        (let [id (new-id!)
+              ms (responses
+                  middleware/default-xform
+                  [(assoc {"op" "eval"
+                           "code" "(prn \"yay\")(+ 41 1)"}
+                          "session" session
+                          "id" id)])]
+          (is (every? #{session}
+                      (map #(-> % :response (get "session")) ms))
+              "Returns correct session")
+
+          (is (every? #{id}
+                      (map #(-> % :response (get "id")) ms))
+              "Returns correct id"))))
+
+    (testing "extend middleware"
+      (let [with-foo-op
+            (with-meta
+              (fn [rf]
+                (let [builtin (middleware/wrap-process-message rf)]
+                  (completing
+                   (fn [result {:keys [ctx msg opts] :as m}]
+                     (if (= :foo (:op msg))
+                       (rf result {:opts opts
+                                   :response {:foo 42}})
+                       (builtin result m))))))
+              {::middleware/requires #{#'middleware/wrap-read-msg}
+               ::middleware/expects #{#'middleware/wrap-response-for}})
+
+            xform (middleware/middleware->xform (-> middleware/default-middleware
+                                                    (disj #'middleware/wrap-process-message)
+                                                    (conj with-foo-op)))
+            m (response xform {"op" "clone"})
+            session (-> m :response (get "new-session"))
+            id (atom 0)
+            new-id! #(swap! id inc)]
+        (is session)
+        (let [id (new-id!)
+              ms (responses xform
+                            [(assoc {"op" "eval"
+                                     "code" "(prn \"yay\")(+ 41 1)"}
+                                    "session" session
+                                    "id" id)])]
+          (is (every? #{session}
+                      (map #(-> % :response (get "session")) ms))
+              "Returns correct session")
+
+          (is (every? #{id}
+                      (map #(-> % :response (get "id")) ms))
+              "Returns correct id"))
+        (is {:foo 42}
+            (-> (response xform
+                          (assoc {"op" "foo"}
+                                 "session" session
+                                 "id" (new-id!)))
+                :response))))
+
+    (testing "add extra ops via middleware"
+     (let [{:keys [ctx bindings opts]} (test-server-config)
+           responses (server-responses ctx bindings opts
+                                       (middleware/default-middleware-with-extra-ops
+                                        {:foo (fn [rf result request]
+                                                (-> result
+                                                    (rf {:response {:foo-echo (-> request :msg :foo)}
+                                                         :response-for request})
+                                                    (rf {:response {:bar-echo (-> request :msg :bar)}
+                                                         :response-for request})))
+                                         :baz (fn [rf result request]
+                                                (-> result
+                                                    (rf {:response {:baz-echo (-> request :msg :baz inc)}
+                                                         :response-for request})))})
+                                       [{"op" "foo"
+                                         "bar" "hasdf"
+                                         "foo" "yay"}
+                                        {"op" "baz"
+                                         "baz" 41}])]
+       (is (= '({:foo-echo "yay", "session" "none", "id" "unknown"}
+                {:bar-echo "hasdf", "session" "none", "id" "unknown"}
+                {:baz-echo 42, "session" "none", "id" "unknown"})
+              (map :response responses)))))
+
+    (testing "add logging middleware"
+      (let [{:keys [ctx bindings opts]} (test-server-config)
+            _ (reset! requests-log [])
+            _ (reset! responses-log [])
+            responses (server-responses ctx bindings opts
+                                        (middleware/middleware->xform
+                                         (conj middleware/default-middleware
+                                               #'log-requests
+                                               #'log-responses))
+                                        [{"op" "foo"
+                                          "bar" "hasdf"
+                                          "foo" "yay"}
+                                         {"op" "baz"
+                                         "baz" 41}])]
+        (is (= @requests-log
+               [{:op :foo, :bar "hasdf", :foo "yay"}
+                {:op :baz, :baz 41}]))
+        (is (= @responses-log
+               [{"status" #{"error" "unknown-op" "done"}, "session" "none", "id" "unknown"}
+                {"status" #{"error" "unknown-op" "done"}, "session" "none", "id" "unknown"}])))))
+
+  )
 
 ;;;; Scratch
 

@@ -1,6 +1,7 @@
 (ns babashka.nrepl.server
   {:author "Michiel Borkent"}
   (:require [babashka.nrepl.impl.server :as server]
+            [babashka.nrepl.server.middleware :as middleware]
             [clojure.string :as string]
             [sci.core :as sci])
   (:import [java.net ServerSocket]))
@@ -24,6 +25,9 @@
                                   port 1667}
                              :as opts}]]
   (let [ctx (assoc ctx :sessions (atom #{}))
+        opts (assoc opts :xform
+                    (get opts :xform
+                         middleware/default-xform))
         inet-address (java.net.InetAddress/getByName host)
         socket-server (new ServerSocket port 0 inet-address)]
     (when-not quiet
