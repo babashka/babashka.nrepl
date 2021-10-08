@@ -50,6 +50,8 @@ If `:port` is not specified, it defaults to `1667`.
 
 If `:host` is not specified, it defaults to `0.0.0.0` (bind to every interface).
 
+If `:xform` is not specified, it defaults to `babashka.nrepl.server.middleware/default-xform`. See the [middleware docs](doc/middleware.md) for more info.
+
 Options can contain a `:describe` map which will be merged in with the response
 for the `:describe` op.
 
@@ -92,6 +94,10 @@ You can pass the return value of `parse-opt` to `start-server!`:
     sci-ctx
     (babashka.nrepl.server/parse-opt "localhost:23456"))
 ```
+
+### Middleware
+
+Babashka's nrepl server supports middleware for customizing, augmenting, and extending the server's default behavior. If you'd like to add logging, extra nrepl operations, or other extensions, check out the [middleware documentation](doc/middleware.md).
 
 ### Tips and Tricks
 
@@ -137,6 +143,7 @@ The main body of work was done by Michiel Borkent
 ([@borkdude](https://github.com/borkdude)). Addition rework and some added
 functionality was done by Crispin Wellington
 ([@retrogradeorbit](https://github.com/retrogradeorbit)).
+Middleware support added by Adrian Smith ([@phronmophobic](https://github.com/phronmophobic)).
 
 ## License
 
