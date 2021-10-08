@@ -32,11 +32,11 @@ The most common types of middleware are implementing extra nrepl ops and cross-c
 
 ```clojure
 
-(require '[sci.core :as sci])
-(require '[babashka.nrepl.middleware :as middleware])
-(require 'babashka.nrepl.server)
+(require '[sci.core :as sci]
+         '[babashka.nrepl.server.middleware :as middleware]
+         'babashka.nrepl.server)
 
-(def sci-ctx (sci/init opts))
+(def sci-ctx (sci/init {}))
 
 (defonce responses (atom []))
 (def
@@ -70,11 +70,11 @@ The most common types of middleware are implementing extra nrepl ops and cross-c
 
 ```clojure
 
-(require '[sci.core :as sci])
-(require '[babashka.nrepl.middleware :as middleware])
-(require 'babashka.nrepl.server)
+(require '[sci.core :as sci]
+         '[babashka.nrepl.server.middleware :as middleware]
+         'babashka.nrepl.server)
 
-(def sci-ctx (sci/init opts))
+(def sci-ctx (sci/init {}))
 
 ;; Add :foo and :baz ops
 (def xform
@@ -90,9 +90,34 @@ The most common types of middleware are implementing extra nrepl ops and cross-c
                (rf {:response {:baz-echo (-> request :msg :baz inc)}
                     :response-for request})))}))
 
-(babashka.nrepl.server/start-server! sci-ctx {:host "127.0.0.1" :port 23456
-                                              :xform xform})
+(defn responses [ctx xform msg]
+  (transduce (comp
+              (map (fn [msg]
+                     {:msg msg
+                      :ctx ctx}))
+              xform)
+             conj
+             []
+             [msg]))
 
+;; Look at responses to a request with a :foo op
+(responses nil xform
+           {:op :foo
+            :foo "hello"
+            :bar "world"})
+;; [{:response {:foo-echo "hello", "session" "none", "id" "unknown"},
+;;   :response-for
+;;   {:msg {:op :foo, :foo "hello", :bar "world"}, :ctx nil}}
+;;  {:response {:bar-echo "world", "session" "none", "id" "unknown"},
+;;   :response-for
+;;   {:msg {:op :foo, :foo "hello", :bar "world"}, :ctx nil}}]
+
+;; Look at responses to a request with a :baz op
+(responses nil xform
+           {:op :baz
+            :baz 42})
+;; [{:response {:baz-echo 43, "session" "none", "id" "unknown"},
+;;   :response-for {:msg {:op :baz, :baz 42}, :ctx nil}}]
 ```
 
 ## Advanced usage
