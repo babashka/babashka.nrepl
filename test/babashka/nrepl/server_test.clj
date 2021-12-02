@@ -385,7 +385,10 @@
         (testing "exception value"
           (bencode/write-bencode os {"op" "eval" "code" "(nth [] 3)"
                                      "session" session "id" (new-id!)})
-          (is (= "java.lang.IndexOutOfBoundsException core REPL:1:1\n" (:err (read-reply in session @id)))))))))
+          (is (= "java.lang.IndexOutOfBoundsException core REPL:1:1\n" (:err (read-reply in session @id))))
+          (bencode/write-bencode os {"op" "eval" "code" "(assert nil \"oops\")"
+                                     "session" session "id" (new-id!)})
+          (is (str/includes? (:err (read-reply in session @id))  "Assert failed: oops")))))))
 
 (deftest nrepl-server-test
   (let [service (atom nil)]

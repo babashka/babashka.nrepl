@@ -113,7 +113,7 @@
           {:response-for msg
            :response {"status" #{"done"}}
            :opts opts}))
-    (catch Exception ex
+    (catch Throwable ex
       (set! *e ex)
       (rf result
           {:response-for msg
