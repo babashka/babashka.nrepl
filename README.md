@@ -3,7 +3,7 @@
 The nREPL server from babashka as a library, so it can be used from
 other sci-based CLIs.
 
-Sci is available here: https://github.com/borkdude/sci
+Sci is available here: https://github.com/babashka/sci
 
 ## Usage
 
