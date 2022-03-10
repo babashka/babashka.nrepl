@@ -1,6 +1,14 @@
 # Changelog
 All notable changes to this project will be documented in this file. This changelog follows the conventions of [keepachangelog.com](http://keepachangelog.com/).
 
+## [0.0.6] - 2022-03-10
+
+- Bump SCI to new org
+
+## [0.0.5] - 2022-10-07
+
+- Add middleware #11 (@phronmophobic)
+
 ## [0.0.4] - 2021-05-16
 
 ### Enhanced
