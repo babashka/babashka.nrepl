@@ -155,7 +155,15 @@
                                        "session" session
                                        "id" (new-id!)})
             (let [reply (read-reply in session @id)]
-              (is (= (edn/read-string "{:e {:b 1, :a 0},\n :c {:b 1, :a 0},\n :b {:a 0},\n :d {:b 1, :a 0},\n :a {:a 0}}\n") (edn/read-string (:value reply)))))))
+              (is (= (edn/read-string "{:e {:b 1, :a 0},\n :c {:b 1, :a 0},\n :b {:a 0},\n :d {:b 1, :a 0},\n :a {:a 0}}\n") (edn/read-string (:value reply)))))
+            (bencode/write-bencode os {"op" "eval"
+                                       "code" "(range 20)"
+                                       "nrepl.middleware.print/print" print-fn
+                                       "nrepl.middleware.print/options" {:length 10}
+                                       "session" session
+                                       "id" (new-id!)})
+            (let [reply (read-reply in session @id)]
+              (is (= "(0 1 2 3 4 5 6 7 8 9 ...)" (str/trim (:value reply)))))))
         (testing "load-file"
           ;; make sure we are in the user ns
           (bencode/write-bencode os {"op" "eval" "code" "(ns user)" "session" session "id" (new-id!)})

@@ -47,10 +47,16 @@
 (defn the-sci-ns [ctx ns-sym]
   (sci/eval-form ctx (list 'clojure.core/the-ns (list 'quote ns-sym))))
 
-(defn format-value [nrepl-pprint debug v]
+;; :nrepl.middleware.print/options {"right-margin" 120, "length" 50, "level" 10}
+
+(defn format-value [nrepl-pprint debug v msg]
   (if nrepl-pprint
     (if-let [pprint-fn (get pretty-print-fns-map nrepl-pprint)]
-      (with-out-str (pprint-fn v))
+      (let [{:strs [right-margin length level]} (get msg :nrepl.middleware.print/options)]
+        (binding [*print-length* length
+                  *print-level* level
+                  clojure.pprint/*print-right-margin* right-margin]
+          (with-out-str (pprint-fn v))))
       (do
         (when debug
           (println "Pretty-Printing is only supported for clojure.core/prn and clojure.pprint/pprint."))
@@ -70,7 +76,8 @@
           ns-str (get msg :ns)
           sci-ns (when ns-str (the-sci-ns ctx (symbol ns-str)))
           nrepl-pprint (:nrepl.middleware.print/print msg)
-
+          _ (when (:debug opts)
+              (prn :msg msg))
           err-pw (make-writer rf result msg "err")
           out-pw (make-writer rf result msg "out")]
       (when debug (println "current ns" (str @sci/ns)))
@@ -100,14 +107,14 @@
                         (rf result
                             {:response-for msg
                              :response {"ns" (str @sci/ns)
-                                        "value" (format-value nrepl-pprint debug value)}
+                                        "value" (format-value nrepl-pprint debug value msg)}
                              :opts opts}))
                       (recur value))
                     last-val)))]
           (when load-file?
             (rf result
                 {:response-for msg
-                 :response {"value" (format-value nrepl-pprint debug last-val)}
+                 :response {"value" (format-value nrepl-pprint debug last-val msg)}
                  :opts opts}))))
       (rf result
           {:response-for msg
