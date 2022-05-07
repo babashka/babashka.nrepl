@@ -244,6 +244,8 @@
        :ns (some-> m :ns ns-name)
        :val @v))))" ns-str sym-str))
                 doc (:doc m)
+                file (:file m)
+                line (:line m)
                 reply (case mapping-type
                         :eldoc (cond->
                                    {"ns" (:ns m)
@@ -259,7 +261,9 @@
                                              "name" (:name m)
                                              "arglists-str" (forms-join (:arglists m))
                                              "status" #{"done"}}
-                                          doc (assoc "doc" doc)))]
+                                          doc (assoc "doc" doc)
+                                          file (assoc "file" file)
+                                          line (assoc "line" line)))]
             (rf result {:response reply
                         :response-for msg
                         :opts opts}))))
