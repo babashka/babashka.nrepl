@@ -225,10 +225,8 @@
                                     (match alias->ns ns->alias query entry))
                                   svs)
                 completions (concat completions from-imports)
-
                 import-symbols (import-symbols->completions (:imports @(:env ctx)) query)
                 completions (concat completions import-symbols)
-
                 completions (->> (map (fn [[namespace name type]]
                                         (cond->
                                             {"candidate" (str name)}
