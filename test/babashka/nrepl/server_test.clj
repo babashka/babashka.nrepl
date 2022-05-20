@@ -221,9 +221,26 @@
                   completions (mapv read-msg completions)
                   completions (into #{} (map (juxt :ns :candidate)) completions)]
               (is (contains? completions ["clojure.core" "+"]))
-              (is (contains? completions ["clojure.core" "+'"])))))
-        (testing "close + ls-sessions"
-          (bencode/write-bencode os {"op" "ls-sessions" "session" session "id" (new-id!)})
+              (is (contains? completions ["clojure.core" "+'"]))))
+          (testing "completions for static interop"
+            (bencode/write-bencode os {"op" "complete" "symbol" "java.lang.String/" "session" session "id" (new-id!)})
+            (let [reply (read-reply in session @id)
+                  completions (:completions reply)
+                  completions (mapv read-msg completions)
+                  completions (into #{} (map (juxt :ns :candidate)) completions)]
+              (is (contains? completions ["java.lang.String" "java.lang.String/copyValueOf"]))
+              (is (contains? completions ["java.lang.String" "java.lang.String/CASE_INSENSITIVE_ORDER"]))
+              (is (contains? completions ["java.lang.String" "java.lang.String/join"]))))
+          (testing "completions for imports"
+            (bencode/write-bencode os {"debug" "true" "op" "complete" "symbol" "Stri" "session" session "id" (new-id!)})
+            (let [reply (read-reply in session @id)
+                  completions (:completions reply)
+                  completions (mapv read-msg completions)
+                  completions (into #{} (map (juxt :ns :candidate)) completions)]
+              (is (contains? completions [nil "String"]))
+              (is (contains? completions [nil "java.lang.String"])))))
+        (testing (bencode/write-bencode os {"op" "ls-sessions" "session" session "id" (new-id!)})
+          "close + ls-sessions"
           (let [reply (read-reply in session @id)
                 sessions (set (:sessions reply))]
             (is (contains? sessions session))
