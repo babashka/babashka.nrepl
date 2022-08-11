@@ -31,7 +31,8 @@
         loc-str (str ns " "
                      (when line
                        (str (str (or file "REPL") ":")
-                            line ":" column"")))]
+                            line ":" column"")))
+        _strace (sci/stacktrace ex)]
     (when debug (prn "sending exception" ex-map))
     (send os (response-for msg {"err" (str ex-name
                                            (when cause (str ": " cause))

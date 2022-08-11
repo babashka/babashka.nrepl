@@ -1,14 +1,24 @@
 (ns babashka.nrepl.impl.server
   {:author "Michiel Borkent"
    :no-doc true}
-  (:require [babashka.nrepl.impl.utils :as utils]
-            [bencode.core :refer [read-bencode]]
-            [clojure.pprint :refer [pprint]]
-            [clojure.string :as str]
-            [clojure.reflect]
-            [sci.core :as sci])
-  (:import [java.io InputStream PushbackInputStream EOFException BufferedOutputStream PrintWriter BufferedWriter Writer StringWriter]
-           [java.net ServerSocket]))
+  (:require
+   [babashka.nrepl.impl.utils :as utils]
+   [bencode.core :refer [read-bencode]]
+   [clojure.pprint :refer [pprint]]
+   [clojure.reflect]
+   [clojure.string :as str]
+   [sci.core :as sci])
+  (:import
+   [java.io
+    BufferedOutputStream
+    BufferedWriter
+    EOFException
+    InputStream
+    PrintWriter
+    PushbackInputStream
+    StringWriter
+    Writer]
+   [java.net ServerSocket]))
 
 (set! *warn-on-reflection* true)
 
@@ -66,7 +76,8 @@
 
 (defn eval-msg [rf result {:keys [ctx msg opts]}]
   (try
-    (let [debug (:debug opts)
+    (let [ctx (assoc ctx :main-thread-id (.getId (Thread/currentThread)))
+          debug (:debug opts)
           code-str (get msg :code)
           load-file? (:load-file msg)
           file (if load-file?
