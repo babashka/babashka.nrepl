@@ -148,7 +148,7 @@
           (let [reply (read-reply in session @id)]
             (is (= "\"/tmp/foo.clj\"" (:value reply)))))
         (testing "supports print middleware for pprint"
-          (doseq [print-fn ["clojure.pprint/pprint" "cider.nrepl.pprint/pprint"]]
+          (doseq [print-fn ["cider.nrepl.pprint/pprint"]]
             (bencode/write-bencode os {"op" "eval"
                                        "code" "{:a {:a 0} :b {:a 0} :c {:a 0 :b 1} :d {:a 0 :b 1} :e {:a 0 :b 1}}"
                                        "nrepl.middleware.print/print" print-fn,

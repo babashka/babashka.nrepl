@@ -4,7 +4,7 @@
   (:require
    [babashka.nrepl.impl.utils :as utils]
    [bencode.core :refer [read-bencode]]
-   [clojure.pprint :refer [pprint]]
+   [clojure.pprint :as pprint]
    [clojure.reflect]
    [clojure.string :as str]
    [sci.core :as sci])
@@ -23,9 +23,7 @@
 (set! *warn-on-reflection* true)
 
 (def pretty-print-fns-map
-  {"clojure.core/prn" prn
-   "clojure.pprint/pprint" pprint
-   "cider.nrepl.pprint/pprint" pprint})
+  {"cider.nrepl.pprint/pprint" pprint/write})
 
 (defn- to-char-array
   ^chars
@@ -66,7 +64,7 @@
       (let [{:strs [right-margin length level]} (get msg :nrepl.middleware.print/options)]
         (binding [*print-length* length
                   *print-level* level
-                  clojure.pprint/*print-right-margin* right-margin]
+                  pprint/*print-right-margin* right-margin]
           (with-out-str (pprint-fn v))))
       (do
         (when debug
