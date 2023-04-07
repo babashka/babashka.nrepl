@@ -144,3 +144,12 @@
          (disj #'wrap-process-message)
          (conj op-handler)))))
 
+(defn middleware->transducer
+  "Return a transducer from a `middleware`."
+  ([middleware]
+   (fn [rf]
+     (fn
+       ([] (rf))
+       ([result] (rf result))
+       ([result input]
+        ((middleware #(rf result %)) input))))))
