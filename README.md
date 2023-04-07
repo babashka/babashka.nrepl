@@ -137,13 +137,14 @@ value:
     babashka.nrepl.server/start-server!)
 ```
 
-## user-middleware
+## User-middleware
+
+Middlware functions defined in babashka user sources.
 
 `start-server!` accepts an opts arg `:user-middlware`.
 This should be a seq of fully qualified symbols that are resolvable by sci.
 Each symbol should be a function in the style of a middleware wrapper.
 Also see [TODO: link babashka example readme]
-
 
 ## Authors
 
