@@ -578,34 +578,34 @@
                 :response))))
 
     (testing "add extra ops via middleware"
-     (let [{:keys [ctx bindings opts]} (test-server-config)
-           responses (server-responses ctx bindings opts
-                                       (middleware/default-middleware-with-extra-ops
-                                        {:foo (fn [rf result request]
-                                                (-> result
-                                                    (rf {:response {:foo-echo (-> request :msg :foo)}
-                                                         :response-for request})
-                                                    (rf {:response {:bar-echo (-> request :msg :bar)}
-                                                         :response-for request})))
-                                         :baz (fn [rf result request]
-                                                (-> result
-                                                    (rf {:response {:baz-echo (-> request :msg :baz inc)}
-                                                         :response-for request})))})
-                                       [{"op" "foo"
-                                         "bar" "hasdf"
-                                         "foo" "yay"}
-                                        {"op" "baz"
-                                         "baz" 41}])]
-       (is (= '({:foo-echo "yay", "session" "none", "id" "unknown"}
-                {:bar-echo "hasdf", "session" "none", "id" "unknown"}
-                {:baz-echo 42, "session" "none", "id" "unknown"})
-              (map :response responses)))))
+      (let [{:keys [ctx bindings opts]} (test-server-config)
+            responses (server-responses ctx bindings opts
+                                        (middleware/default-middleware-with-extra-ops
+                                         {:foo (fn [rf result request]
+                                                 (-> result
+                                                     (rf {:response {:foo-echo (-> request :msg :foo)}
+                                                          :response-for request})
+                                                     (rf {:response {:bar-echo (-> request :msg :bar)}
+                                                          :response-for request})))
+                                          :baz (fn [rf result request]
+                                                 (-> result
+                                                     (rf {:response {:baz-echo (-> request :msg :baz inc)}
+                                                          :response-for request})))})
+                                        [{"op" "foo"
+                                          "bar" "hasdf"
+                                          "foo" "yay"}
+                                         {"op" "baz"
+                                          "baz" 41}])]
+        (is (= '({:foo-echo "yay", "session" "none", "id" "unknown"}
+                 {:bar-echo "hasdf", "session" "none", "id" "unknown"}
+                 {:baz-echo 42, "session" "none", "id" "unknown"})
+               (map :response responses)))))
 
     (testing "add logging middleware"
       (let [{:keys [ctx bindings opts]} (test-server-config)
             _ (reset! requests-log [])
             _ (reset! responses-log [])
-            responses (server-responses ctx bindings opts
+            _responses (server-responses ctx bindings opts
                                         (middleware/middleware->xform
                                          (conj middleware/default-middleware
                                                #'log-requests
@@ -614,15 +614,157 @@
                                           "bar" "hasdf"
                                           "foo" "yay"}
                                          {"op" "baz"
-                                         "baz" 41}])]
+                                          "baz" 41}])]
         (is (= @requests-log
                [{:op :foo, :bar "hasdf", :foo "yay"}
                 {:op :baz, :baz 41}]))
         (is (= @responses-log
                [{"status" #{"error" "unknown-op" "done"}, "session" "none", "id" "unknown"}
-                {"status" #{"error" "unknown-op" "done"}, "session" "none", "id" "unknown"}])))))
+                {"status" #{"error" "unknown-op" "done"}, "session" "none", "id" "unknown"}]))))
 
-  )
+    (testing
+        "add user land request middleware"
+        (let [{:keys [ctx bindings opts]} (test-server-config)
+              sci-requests-log @(sci/eval-string*
+                                 ctx
+                                 "(defonce requests-log (atom []))")
+              _ (sci/eval-string*
+                 ctx
+                 "(defn
+^{:babashka.nrepl.server.middleware/requires #{'middleware/wrap-read-msg}
+  :babashka.nrepl.server.middleware/expects #{'middleware/wrap-process-message}}
+ log-requests-middleware [handler]
+  (fn [request]
+    (swap! requests-log conj (:msg request))
+    (handler request)))")
+              user-middleware ['user/log-requests-middleware]
+              _responses (server-responses
+                         ctx
+                         bindings
+                         opts
+                         (middleware/middleware->xform
+                          (into
+                           middleware/default-middleware
+                           (server/->user-middleware
+                            ctx
+                            user-middleware)))
+                         [{"op" "foo"
+                           "bar" "hasdf"
+                           "foo" "yay"}
+                          {"op" "baz" "baz" 41}])]
+          (is (= @sci-requests-log
+                 [{:op :foo, :bar "hasdf", :foo "yay"} {:op :baz, :baz 41}]))))
+
+    (testing
+        "add user land logging middleware"
+        (let [{:keys [ctx bindings opts]} (test-server-config)
+              sci-requests-log @(sci/eval-string*
+                                 ctx
+                                 "(defonce requests-log (atom []))")
+              sci-respones-log @(sci/eval-string*
+                                 ctx
+                                 "(defonce responses-log (atom []))")
+              _ (sci/eval-string*
+                 ctx
+                 "(defn
+^{:babashka.nrepl.server.middleware/requires #{'middleware/wrap-read-msg}
+  :babashka.nrepl.server.middleware/expects #{'middleware/wrap-process-message}}
+ log-requests-middleware [handler]
+  (fn [request]
+    (swap! requests-log conj (:msg request))
+    (handler request)))
+
+(defn
+ ^{:babashka.nrepl.server.middleware/requires #{'middleware/wrap-response-for}}
+ log-responses-middleware [handler]
+  (fn [response]
+    (swap! responses-log conj (:response response))
+    (handler response)))")
+              user-middleware ['user/log-responses-middleware
+                               'user/log-requests-middleware]
+              _responses (server-responses
+                         ctx
+                         bindings
+                         opts
+                         (middleware/middleware->xform
+                          (into
+                           middleware/default-middleware
+                           (server/->user-middleware
+                            ctx
+                            user-middleware)))
+                         [{"op" "foo"
+                           "bar" "hasdf"
+                           "foo" "yay"}
+                          {"op" "baz" "baz" 41}])]
+          (is (= @sci-requests-log [{:op :foo, :bar "hasdf", :foo "yay"} {:op :baz, :baz 41}]))
+          (is
+           (=
+            @sci-respones-log
+            [{"status" #{"error" "unknown-op" "done"},
+              "session" "none",
+              "id" "unknown"}
+             {"status" #{"error" "unknown-op" "done"},
+              "session" "none",
+              "id" "unknown"}]))))
+    (testing
+        "add user land and xform middleware"
+        (let [{:keys [ctx bindings opts]} (test-server-config)
+              sci-requests-log @(sci/eval-string*
+                                 ctx
+                                 "(defonce requests-log (atom []))")
+              sci-respones-log @(sci/eval-string*
+                                 ctx
+                                 "(defonce responses-log (atom []))")
+              _ (sci/eval-string*
+                 ctx
+                 "(defn
+^{:babashka.nrepl.server.middleware/requires #{'middleware/wrap-read-msg}
+  :babashka.nrepl.server.middleware/expects #{'middleware/wrap-process-message}}
+ log-requests-middleware [handler]
+  (fn [request]
+    (swap! requests-log conj (:msg request))
+    (handler request)))
+
+(defn
+ ^{:babashka.nrepl.server.middleware/requires #{'middleware/wrap-response-for}}
+ log-responses-middleware [handler]
+  (fn [response]
+    (swap! responses-log conj (:response response))
+    (handler response)))")
+
+              _ (reset! requests-log [])
+              _ (reset! responses-log [])
+
+              user-middleware ['user/log-responses-middleware
+                               'user/log-requests-middleware]
+              _responses (server-responses
+                          ctx
+                          bindings
+                          opts
+                          (middleware/middleware->xform
+                           (into
+                            #{}
+                            (concat
+                             middleware/default-middleware
+                             (server/->user-middleware ctx user-middleware)
+                             [#'log-requests #'log-responses])))
+                          [{"op" "foo"
+                            "bar" "hasdf"
+                            "foo" "yay"}
+                           {"op" "baz" "baz" 41}])]
+          (is (= @sci-requests-log [{:op :foo, :bar "hasdf", :foo "yay"} {:op :baz, :baz 41}])
+              "Sci request log keeps track of requests.")
+          (is (= @requests-log @sci-requests-log)
+              "sci request log and xform request log are equal.")
+          (is
+           (=
+            @sci-respones-log [{"status" #{"error" "unknown-op" "done"},
+                                "session" "none"
+                                "id" "unknown"}
+                               {"status" #{"error" "unknown-op" "done"},
+                                "session" "none"
+                                "id" "unknown"}]))
+          (is (= @responses-log @sci-respones-log))))))
 
 ;;;; Scratch
 

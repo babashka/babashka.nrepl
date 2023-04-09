@@ -144,12 +144,21 @@
          (disj #'wrap-process-message)
          (conj op-handler)))))
 
-(defn middleware->transducer
-  "Return a transducer from a `middleware`."
+(defn
+  middleware->transducer
+  "Return a transducer from a `middleware`.
+  Preserves `::requires` and `::expects` metadata of `middlware`.
+  See https://github.com/babashka/babashka.nrepl/blob/master/doc/middleware.md."
   ([middleware]
-   (fn [rf]
-     (fn
-       ([] (rf))
-       ([result] (rf result))
-       ([result input]
-        ((middleware #(rf result %)) input))))))
+  (let [f
+        (fn
+          [rf]
+          (fn
+            ([] (rf))
+            ([result] (rf result))
+            ([result input] ((middleware #(rf result %)) input))))
+        {::keys [requires expects]} (meta middleware)]
+    (with-meta f
+      (cond-> {}
+        requires (assoc ::requires (into #{} (map requiring-resolve) requires))
+        expects (assoc ::expects (into #{} (map requiring-resolve) expects)))))))
