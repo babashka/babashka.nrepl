@@ -578,34 +578,34 @@
                 :response))))
 
     (testing "add extra ops via middleware"
-      (let [{:keys [ctx bindings opts]} (test-server-config)
-            responses (server-responses ctx bindings opts
-                                        (middleware/default-middleware-with-extra-ops
-                                         {:foo (fn [rf result request]
-                                                 (-> result
-                                                     (rf {:response {:foo-echo (-> request :msg :foo)}
-                                                          :response-for request})
-                                                     (rf {:response {:bar-echo (-> request :msg :bar)}
-                                                          :response-for request})))
-                                          :baz (fn [rf result request]
-                                                 (-> result
-                                                     (rf {:response {:baz-echo (-> request :msg :baz inc)}
-                                                          :response-for request})))})
-                                        [{"op" "foo"
-                                          "bar" "hasdf"
-                                          "foo" "yay"}
-                                         {"op" "baz"
-                                          "baz" 41}])]
-        (is (= '({:foo-echo "yay", "session" "none", "id" "unknown"}
-                 {:bar-echo "hasdf", "session" "none", "id" "unknown"}
-                 {:baz-echo 42, "session" "none", "id" "unknown"})
-               (map :response responses)))))
+     (let [{:keys [ctx bindings opts]} (test-server-config)
+           responses (server-responses ctx bindings opts
+                                       (middleware/default-middleware-with-extra-ops
+                                        {:foo (fn [rf result request]
+                                                (-> result
+                                                    (rf {:response {:foo-echo (-> request :msg :foo)}
+                                                         :response-for request})
+                                                    (rf {:response {:bar-echo (-> request :msg :bar)}
+                                                         :response-for request})))
+                                         :baz (fn [rf result request]
+                                                (-> result
+                                                    (rf {:response {:baz-echo (-> request :msg :baz inc)}
+                                                         :response-for request})))})
+                                       [{"op" "foo"
+                                         "bar" "hasdf"
+                                         "foo" "yay"}
+                                        {"op" "baz"
+                                         "baz" 41}])]
+       (is (= '({:foo-echo "yay", "session" "none", "id" "unknown"}
+                {:bar-echo "hasdf", "session" "none", "id" "unknown"}
+                {:baz-echo 42, "session" "none", "id" "unknown"})
+              (map :response responses)))))
 
     (testing "add logging middleware"
       (let [{:keys [ctx bindings opts]} (test-server-config)
             _ (reset! requests-log [])
             _ (reset! responses-log [])
-            _responses (server-responses ctx bindings opts
+            responses (server-responses ctx bindings opts
                                         (middleware/middleware->xform
                                          (conj middleware/default-middleware
                                                #'log-requests
