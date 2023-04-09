@@ -631,8 +631,8 @@
               _ (sci/eval-string*
                  ctx
                  "(defn
-^{:babashka.nrepl.server.middleware/requires #{'middleware/wrap-read-msg}
-  :babashka.nrepl.server.middleware/expects #{'middleware/wrap-process-message}}
+^{:babashka.nrepl.server.middleware/requires #{'babashka.nrepl.server.middleware/wrap-read-msg}
+  :babashka.nrepl.server.middleware/expects #{'babashka.nrepl.server.middleware/wrap-process-message}}
  log-requests-middleware [handler]
   (fn [request]
     (swap! requests-log conj (:msg request))
@@ -667,15 +667,15 @@
               _ (sci/eval-string*
                  ctx
                  "(defn
-^{:babashka.nrepl.server.middleware/requires #{'middleware/wrap-read-msg}
-  :babashka.nrepl.server.middleware/expects #{'middleware/wrap-process-message}}
+^{:babashka.nrepl.server.middleware/requires #{'babashka.nrepl.server.middleware/wrap-read-msg}
+  :babashka.nrepl.server.middleware/expects #{'babashka.nrepl.server.middleware/wrap-process-message}}
  log-requests-middleware [handler]
   (fn [request]
     (swap! requests-log conj (:msg request))
     (handler request)))
 
 (defn
- ^{:babashka.nrepl.server.middleware/requires #{'middleware/wrap-response-for}}
+ ^{:babashka.nrepl.server.middleware/requires #{'babashka.nrepl.server.middleware/wrap-response-for}}
  log-responses-middleware [handler]
   (fn [response]
     (swap! responses-log conj (:response response))
@@ -718,15 +718,15 @@
               _ (sci/eval-string*
                  ctx
                  "(defn
-^{:babashka.nrepl.server.middleware/requires #{'middleware/wrap-read-msg}
-  :babashka.nrepl.server.middleware/expects #{'middleware/wrap-process-message}}
+^{:babashka.nrepl.server.middleware/requires #{'babashka.nrepl.server.middleware/wrap-read-msg}
+  :babashka.nrepl.server.middleware/expects #{'babashka.nrepl.server.middleware/wrap-process-message}}
  log-requests-middleware [handler]
   (fn [request]
     (swap! requests-log conj (:msg request))
     (handler request)))
 
 (defn
- ^{:babashka.nrepl.server.middleware/requires #{'middleware/wrap-response-for}}
+ ^{:babashka.nrepl.server.middleware/requires #{'babashka.nrepl.server.middleware/wrap-response-for}}
  log-responses-middleware [handler]
   (fn [response]
     (swap! responses-log conj (:response response))
