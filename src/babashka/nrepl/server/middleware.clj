@@ -147,7 +147,7 @@
 (defn
   middleware->transducer
   "Return a transducer from a `middleware`.
-  Preserves `::requires` and `::expects` metadata of `middlware`.
+  Preserves `::requires` and `::expects` metadata of `middleware`.
   See https://github.com/babashka/babashka.nrepl/blob/master/doc/middleware.md."
   ([middleware]
   (let [f
