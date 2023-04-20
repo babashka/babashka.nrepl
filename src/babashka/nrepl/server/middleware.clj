@@ -72,9 +72,9 @@
                                       "ddddddddoth not contain " %))
                         (concat requires
                                 expects))
-                  (cons {v (into #{} requires)}
+                  (cons {(maybe-deref v) (into #{} (map maybe-deref requires))}
                         (for [expected expects]
-                          {expected #{v}}))))))
+                          {(maybe-deref expected) #{(maybe-deref v)}}))))))
      (completing merge-graph)
      {}
      middleware)))
