@@ -139,12 +139,12 @@ value:
 
 ## User middleware
 
-Middelware functions defined in babashka user sources.
+User-land middleware can be passed via the `:middleware` option of
+`start-server!`.  This should be a seq of fully qualified symbols that are
+resolvable by SCI. Each symbol should be a function in the style of a
+middleware wrapper.
 
-`start-server!` accepts an opts arg `:user-middleware`.
-This should be a seq of fully qualified symbols that are resolvable by SCI.
-Each symbol should be a function in the style of a middleware wrapper.
-Also see [TODO: link babashka example readme]
+<!-- TODO: mode docs -->
 
 ## Authors
 
