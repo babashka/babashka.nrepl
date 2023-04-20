@@ -43,34 +43,41 @@
 (defn sci-var? [x]
   (instance? sci.lang.IVar x))
 
+(defn maybe-deref
+  "For comparing SCI vars against host vars"
+  [x]
+  (if (instance? clojure.lang.IDeref x)
+    @x x))
+
 (defn ^:private middleware->graph
   "Given a set of middleware, return a graph represented as a map.
 
   Each (key, value) pair is: (node, set of nodes pointed to).
   "
   [middleware]
-  (transduce
-   (map
-    (fn [v]
-      (reduce merge-graph
-              {}
-              (let [vmeta (meta v)
-                    requires (::requires vmeta)
-                    expects (::expects vmeta)]
-                (assert (seqable? requires) ":babashka.nrepl.server.middleware/requires must be seqable")
-                (assert (seqable? expects) ":babashka.nrepl.server.middleware/expects must be seqable")
-                (run! #(assert (contains? middleware %)
-                               (str "Middleware required or expected, but not provided"
-                                    \n
-                                    "Middleware " middleware "doth not contain " %))
-                      (concat requires
-                              expects))
-                (cons {v (into #{} requires)}
-                      (for [expected expects]
-                        {expected #{v}}))))))
-   (completing merge-graph)
-   {}
-   middleware))
+  (let [dereffed (set (map maybe-deref middleware))]
+    (transduce
+     (map
+      (fn [v]
+        (reduce merge-graph
+                {}
+                (let [vmeta (meta v)
+                      requires (::requires vmeta)
+                      expects (::expects vmeta)]
+                  (assert (seqable? requires) ":babashka.nrepl.server.middleware/requires must be seqable")
+                  (assert (seqable? expects) ":babashka.nrepl.server.middleware/expects must be seqable")
+                  (run! #(assert (contains? dereffed #_middleware (maybe-deref %))
+                                 (str "Middleware required or expected, but not provided"
+                                      \n
+                                      "ddddddddoth not contain " %))
+                        (concat requires
+                                expects))
+                  (cons {v (into #{} requires)}
+                        (for [expected expects]
+                          {expected #{v}}))))))
+     (completing merge-graph)
+     {}
+     middleware)))
 
 ;; Based off of Kahn's algorithm
 ;; https://en.wikipedia.org/wiki/Topological_sorting
@@ -165,7 +172,6 @@
             ([result] (rf result))
             ([result input] ((middleware #(rf result %)) input))))
         {::keys [requires expects]} (meta middleware)]
-    (prn (meta middleware))
     (with-meta f
       (meta middleware)
       #_(cond-> {}

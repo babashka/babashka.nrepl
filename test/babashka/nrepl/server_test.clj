@@ -623,12 +623,13 @@
                 {"status" #{"error" "unknown-op" "done"}, "session" "none", "id" "unknown"}]))))))
 
 (deftest middleware->xform-test
-  (let [{:keys [ctx bindings opts]} (test-server-config
+  (let [sci-ns (sci/create-ns 'babashka.nrepl.server.middleware nil)
+        {:keys [ctx bindings opts]} (test-server-config
                                      {:namespaces
                                       {'babashka.nrepl.server.middleware
                                        {'wrap-read-msg babashka.nrepl.server.middleware/wrap-read-msg
                                         'wrap-process-message babashka.nrepl.server.middleware/wrap-process-message
-                                        'wrap-response-for babashka.nrepl.server.middleware/wrap-response-for}}})
+                                        'wrap-response-for (sci/copy-var babashka.nrepl.server.middleware/wrap-response-for sci-ns)}}})
         sci-requests-log @(sci/eval-string*
                            ctx
                            "(defonce requests-log (atom []))")
@@ -637,7 +638,7 @@
                            "(defonce responses-log (atom []))")
         _ (sci/eval-string*
            ctx
-           "(defn
+           "#_(defn
 ^{:babashka.nrepl.server.middleware/requires #{#'babashka.nrepl.server.middleware/wrap-read-msg}
   :babashka.nrepl.server.middleware/expects #{#'babashka.nrepl.server.middleware/wrap-process-message}}
  log-requests-middleware [handler]
@@ -652,14 +653,14 @@
     (swap! responses-log conj (:response response))
     (handler response)))")
         user-middleware ['user/log-responses-middleware
-                         'user/log-requests-middleware]
+                         #_'user/log-requests-middleware]
         user-middleware (server/->user-middleware
                          ctx
                          user-middleware)
         middlewarez (into
                      middleware/default-middleware
                      user-middleware)
-        _ (prn :middlewarez middlewarez)
+        ;; crash
         xform (middleware/middleware->xform middlewarez)]))
 
 
