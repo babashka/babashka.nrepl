@@ -160,9 +160,8 @@
             ([result] (rf result))
             ([result input] ((middleware #(rf result %)) input))))
         {::keys [requires expects]} (meta middleware)]
-    (prn (requiring-resolve 'babashka.nrepl.server.middleware/wrap-read-msg))
-    (System/exit 0)
-    #_(with-meta f
-      (cond-> {}
-        requires (assoc ::requires (into #{} (map requiring-resolve) requires))
-        expects (assoc ::expects (into #{} (map requiring-resolve) expects))))))
+    (with-meta f
+      (meta middleware)
+      #_(cond-> {}
+        requires (assoc ::requires (set requires) #_(into #{} (map requiring-resolve) requires))
+        expects (assoc ::expects (set expects) #_(into #{} (map requiring-resolve) expects))))))
