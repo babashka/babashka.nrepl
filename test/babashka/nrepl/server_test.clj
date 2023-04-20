@@ -623,9 +623,14 @@
                 {"status" #{"error" "unknown-op" "done"}, "session" "none", "id" "unknown"}]))))))
 
 (deftest user-middleware-test
- #_(testing
+ (testing
      "add user land logging middleware"
-      (let [{:keys [ctx bindings opts]} (test-server-config)
+   (let [{:keys [ctx bindings opts]} (test-server-config
+                                      {:namespaces
+                                       {'babashka.nrepl.server.middleware
+                                        {'wrap-read-msg babashka.nrepl.server.middleware/wrap-read-msg
+                                         'wrap-process-message babashka.nrepl.server.middleware/wrap-process-message
+                                         'wrap-response-for babashka.nrepl.server.middleware/wrap-response-for}}})
             sci-requests-log @(sci/eval-string*
                                ctx
                                "(defonce requests-log (atom []))")
@@ -635,15 +640,15 @@
             _ (sci/eval-string*
                ctx
                "(defn
-^{:babashka.nrepl.server.middleware/requires #{'babashka.nrepl.server.middleware/wrap-read-msg}
-  :babashka.nrepl.server.middleware/expects #{'babashka.nrepl.server.middleware/wrap-process-message}}
+^{:babashka.nrepl.server.middleware/requires #{#'babashka.nrepl.server.middleware/wrap-read-msg}
+  :babashka.nrepl.server.middleware/expects #{#'babashka.nrepl.server.middleware/wrap-process-message}}
  log-requests-middleware [handler]
   (fn [request]
     (swap! requests-log conj (:msg request))
     (handler request)))
 
 (defn
- ^{:babashka.nrepl.server.middleware/requires #{'babashka.nrepl.server.middleware/wrap-response-for}}
+ ^{:babashka.nrepl.server.middleware/requires #{#'babashka.nrepl.server.middleware/wrap-response-for}}
  log-responses-middleware [handler]
   (fn [response]
     (swap! responses-log conj (:response response))

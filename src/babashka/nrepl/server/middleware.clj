@@ -151,7 +151,7 @@
   Preserves `::requires` and `::expects` metadata of `middleware`.
   See https://github.com/babashka/babashka.nrepl/blob/master/doc/middleware.md."
   [ctx middleware]
-  (let [requiring-resolve #(sci/eval-form ctx (list 'clojure.core/requiring-resolve %))
+  (let [requiring-resolve identity #_#(sci/eval-form ctx (list 'clojure.core/requiring-resolve %))
         f
         (fn
           [rf]
