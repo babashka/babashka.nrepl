@@ -622,6 +622,47 @@
                [{"status" #{"error" "unknown-op" "done"}, "session" "none", "id" "unknown"}
                 {"status" #{"error" "unknown-op" "done"}, "session" "none", "id" "unknown"}]))))))
 
+(deftest middleware->xform-test
+  (let [{:keys [ctx bindings opts]} (test-server-config
+                                     {:namespaces
+                                      {'babashka.nrepl.server.middleware
+                                       {'wrap-read-msg babashka.nrepl.server.middleware/wrap-read-msg
+                                        'wrap-process-message babashka.nrepl.server.middleware/wrap-process-message
+                                        'wrap-response-for babashka.nrepl.server.middleware/wrap-response-for}}})
+        sci-requests-log @(sci/eval-string*
+                           ctx
+                           "(defonce requests-log (atom []))")
+        sci-respones-log @(sci/eval-string*
+                           ctx
+                           "(defonce responses-log (atom []))")
+        _ (sci/eval-string*
+           ctx
+           "(defn
+^{:babashka.nrepl.server.middleware/requires #{#'babashka.nrepl.server.middleware/wrap-read-msg}
+  :babashka.nrepl.server.middleware/expects #{#'babashka.nrepl.server.middleware/wrap-process-message}}
+ log-requests-middleware [handler]
+  (fn [request]
+    (swap! requests-log conj (:msg request))
+    (handler request)))
+
+(defn
+ ^{:babashka.nrepl.server.middleware/requires #{#'babashka.nrepl.server.middleware/wrap-response-for}}
+ log-responses-middleware [handler]
+  (fn [response]
+    (swap! responses-log conj (:response response))
+    (handler response)))")
+        user-middleware ['user/log-responses-middleware
+                         'user/log-requests-middleware]
+        user-middleware (server/->user-middleware
+                         ctx
+                         user-middleware)
+        middlewarez (into
+                     middleware/default-middleware
+                     user-middleware)
+        _ (prn :middlewarez middlewarez)
+        xform (middleware/middleware->xform middlewarez)]))
+
+
 (deftest user-middleware-test
  (testing
      "add user land logging middleware"
@@ -653,18 +694,22 @@
   (fn [response]
     (swap! responses-log conj (:response response))
     (handler response)))")
-            user-middleware ['user/log-responses-middleware
-                             'user/log-requests-middleware]
-            _responses nil #_(server-responses
+         user-middleware ['user/log-responses-middleware
+                          'user/log-requests-middleware]
+         user-middleware (server/->user-middleware
+                          ctx
+                          user-middleware)
+         _ (prn :user-middleware (seq user-middleware))
+         _ (prn :->>>> (map meta user-middleware))
+         xform (middleware/middleware->xform
+                (into
+                 middleware/default-middleware
+                 user-middleware))
+         #_#__responses (server-responses
                         ctx
                         bindings
                         opts
-                        (middleware/middleware->xform
-                         (into
-                          middleware/default-middleware
-                          (server/->user-middleware
-                           ctx
-                           user-middleware)))
+                        xform
                         [{"op" "foo"
                           "bar" "hasdf"
                           "foo" "yay"}

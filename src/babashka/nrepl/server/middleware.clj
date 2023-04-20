@@ -40,6 +40,9 @@
 (defn ^:private merge-graph [g1 g2]
   (merge-with clojure.set/union g1 g2))
 
+(defn sci-var? [x]
+  (instance? sci.lang.IVar x))
+
 (defn ^:private middleware->graph
   "Given a set of middleware, return a graph represented as a map.
 
@@ -56,10 +59,12 @@
                     expects (::expects vmeta)]
                 (assert (seqable? requires) ":babashka.nrepl.server.middleware/requires must be seqable")
                 (assert (seqable? expects) ":babashka.nrepl.server.middleware/expects must be seqable")
-                (assert (every? #(contains? middleware %)
-                                (concat requires
-                                        expects))
-                        (str "Middleware required or expected, but not provided"))
+                (run! #(assert (contains? middleware %)
+                               (str "Middleware required or expected, but not provided"
+                                    \n
+                                    "Middleware " middleware "doth not contain " %))
+                      (concat requires
+                              expects))
                 (cons {v (into #{} requires)}
                       (for [expected expects]
                         {expected #{v}}))))))
@@ -105,7 +110,7 @@
     xform))
 
 (def default-xform
-  "Default middleware used by sci nrepl server."
+  "Default middleware used by SCI nrepl server."
   (middleware->xform default-middleware))
 
 (defn default-middleware-with-extra-ops
@@ -160,6 +165,7 @@
             ([result] (rf result))
             ([result input] ((middleware #(rf result %)) input))))
         {::keys [requires expects]} (meta middleware)]
+    (prn (meta middleware))
     (with-meta f
       (meta middleware)
       #_(cond-> {}

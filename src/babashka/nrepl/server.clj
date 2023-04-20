@@ -24,12 +24,12 @@
   (or (sci/eval-form sci-ctx `(requiring-resolve '~sym))
       (throw (Exception. (str "Failed to resolve " sym)))))
 
-(defn ->user-middleware [sci-ctx middlware]
+(defn ->user-middleware [sci-ctx middleware]
   (sequence
    (comp
     (map #(->sci-var sci-ctx %))
     (map #(middleware/middleware->transducer sci-ctx %)))
-   middlware))
+   middleware))
 
 (defn start-server! [ctx & [{:keys [host port quiet middleware]
                              :or {host "0.0.0.0"
