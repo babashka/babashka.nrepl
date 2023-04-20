@@ -1,6 +1,7 @@
 (ns babashka.nrepl.server.middleware
   (:require [babashka.nrepl.impl.server :as server]
-            clojure.set))
+            [clojure.set :as set]
+            [sci.core :as sci]))
 
 (def wrap-read-msg
   "Middleware for normalizing an nrepl message read from bencode."
@@ -149,8 +150,9 @@
   "Return a transducer from a `middleware`.
   Preserves `::requires` and `::expects` metadata of `middleware`.
   See https://github.com/babashka/babashka.nrepl/blob/master/doc/middleware.md."
-  ([middleware]
-  (let [f
+  [ctx middleware]
+  (let [requiring-resolve #(sci/eval-form ctx (list 'clojure.core/requiring-resolve %))
+        f
         (fn
           [rf]
           (fn
@@ -158,7 +160,9 @@
             ([result] (rf result))
             ([result input] ((middleware #(rf result %)) input))))
         {::keys [requires expects]} (meta middleware)]
-    (with-meta f
+    (prn (requiring-resolve 'babashka.nrepl.server.middleware/wrap-read-msg))
+    (System/exit 0)
+    #_(with-meta f
       (cond-> {}
         requires (assoc ::requires (into #{} (map requiring-resolve) requires))
-        expects (assoc ::expects (into #{} (map requiring-resolve) expects)))))))
+        expects (assoc ::expects (into #{} (map requiring-resolve) expects))))))
