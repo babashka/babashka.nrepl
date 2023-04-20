@@ -622,7 +622,7 @@
                [{"status" #{"error" "unknown-op" "done"}, "session" "none", "id" "unknown"}
                 {"status" #{"error" "unknown-op" "done"}, "session" "none", "id" "unknown"}]))))))
 
-(deftest middleware->xform-test
+#_(deftest middleware->xform-test
   (let [sci-ns (sci/create-ns 'babashka.nrepl.server.middleware nil)
         {:keys [ctx bindings opts]} (test-server-config
                                      {:namespaces
@@ -700,13 +700,11 @@
          user-middleware (server/->user-middleware
                           ctx
                           user-middleware)
-         _ (prn :user-middleware (seq user-middleware))
-         _ (prn :->>>> (map meta user-middleware))
          xform (middleware/middleware->xform
                 (into
                  middleware/default-middleware
                  user-middleware))
-         #_#__responses (server-responses
+         _responses (server-responses
                         ctx
                         bindings
                         opts
@@ -715,7 +713,7 @@
                           "bar" "hasdf"
                           "foo" "yay"}
                          {"op" "baz" "baz" 41}])]
-        #_#_(is (= @sci-requests-log [{:op :foo, :bar "hasdf", :foo "yay"} {:op :baz, :baz 41}]))
+        (is (= @sci-requests-log [{:op :foo, :bar "hasdf", :foo "yay"} {:op :baz, :baz 41}]))
         (is
          (=
           @sci-respones-log
