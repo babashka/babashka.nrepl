@@ -3,7 +3,7 @@
 The nREPL server from babashka as a library, so it can be used from
 other sci-based CLIs.
 
-Sci is available here: https://github.com/babashka/sci
+SCI is available here: https://github.com/babashka/sci
 
 ## Usage
 
@@ -137,6 +137,15 @@ value:
     babashka.nrepl.server/start-server!)
 ```
 
+## User middleware
+
+Middelware functions defined in babashka user sources.
+
+`start-server!` accepts an opts arg `:user-middleware`.
+This should be a seq of fully qualified symbols that are resolvable by SCI.
+Each symbol should be a function in the style of a middleware wrapper.
+Also see [TODO: link babashka example readme]
+
 ## Authors
 
 The main body of work was done by Michiel Borkent
@@ -147,7 +156,7 @@ Middleware support added by Adrian Smith ([@phronmophobic](https://github.com/ph
 
 ## License
 
-The project code is Copyright © 2019-2020 Michiel Borkent
+The project code is Copyright © 2019-2023 Michiel Borkent
 
 It is distributed under the Eclipse Public License 1.0
 (http://opensource.org/licenses/eclipse-1.0.php)

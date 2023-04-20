@@ -1,6 +1,7 @@
 (ns babashka.nrepl.server.middleware
   (:require [babashka.nrepl.impl.server :as server]
-            clojure.set))
+            [clojure.set :as set]
+            [sci.core :as sci]))
 
 (def wrap-read-msg
   "Middleware for normalizing an nrepl message read from bencode."
@@ -39,32 +40,44 @@
 (defn ^:private merge-graph [g1 g2]
   (merge-with clojure.set/union g1 g2))
 
+(defn sci-var? [x]
+  (instance? sci.lang.IVar x))
+
+(defn maybe-deref
+  "For comparing SCI vars against host vars"
+  [x]
+  (if (instance? clojure.lang.IDeref x)
+    @x x))
+
 (defn ^:private middleware->graph
   "Given a set of middleware, return a graph represented as a map.
 
   Each (key, value) pair is: (node, set of nodes pointed to).
   "
   [middleware]
-  (transduce
-   (map
-    (fn [v]
-      (reduce merge-graph
-              {}
-              (let [vmeta (meta v)
-                    requires (::requires vmeta)
-                    expects (::expects vmeta)]
-                (assert (seqable? requires) ":babashka.nrepl.server.middleware/requires must be seqable")
-                (assert (seqable? expects) ":babashka.nrepl.server.middleware/expects must be seqable")
-                (assert (every? #(contains? middleware %)
-                                (concat requires
-                                        expects))
-                        (str "Middleware required or expected, but not provided"))
-                (cons {v (into #{} requires)}
-                      (for [expected expects]
-                        {expected #{v}}))))))
-   (completing merge-graph)
-   {}
-   middleware))
+  (let [dereffed (set (map maybe-deref middleware))]
+    (transduce
+     (map
+      (fn [v]
+        (reduce merge-graph
+                {}
+                (let [vmeta (meta v)
+                      requires (::requires vmeta)
+                      expects (::expects vmeta)]
+                  (assert (seqable? requires) ":babashka.nrepl.server.middleware/requires must be seqable")
+                  (assert (seqable? expects) ":babashka.nrepl.server.middleware/expects must be seqable")
+                  (run! #(assert (contains? dereffed #_middleware (maybe-deref %))
+                                 (str "Middleware required or expected, but not provided"
+                                      \n
+                                      "ddddddddoth not contain " %))
+                        (concat requires
+                                expects))
+                  (cons {(maybe-deref v) (into #{} (map maybe-deref requires))}
+                        (for [expected expects]
+                          {(maybe-deref expected) #{(maybe-deref v)}}))))))
+     (completing merge-graph)
+     {}
+     middleware)))
 
 ;; Based off of Kahn's algorithm
 ;; https://en.wikipedia.org/wiki/Topological_sorting
@@ -104,7 +117,7 @@
     xform))
 
 (def default-xform
-  "Default middleware used by sci nrepl server."
+  "Default middleware used by SCI nrepl server."
   (middleware->xform default-middleware))
 
 (defn default-middleware-with-extra-ops
@@ -144,3 +157,23 @@
          (disj #'wrap-process-message)
          (conj op-handler)))))
 
+(defn
+  middleware->transducer
+  "Return a transducer from a `middleware`.
+  Preserves `::requires` and `::expects` metadata of `middleware`.
+  See https://github.com/babashka/babashka.nrepl/blob/master/doc/middleware.md."
+  [ctx middleware]
+  (let [requiring-resolve identity #_#(sci/eval-form ctx (list 'clojure.core/requiring-resolve %))
+        f
+        (fn
+          [rf]
+          (fn
+            ([] (rf))
+            ([result] (rf result))
+            ([result input] ((middleware #(rf result %)) input))))
+        {::keys [requires expects]} (meta middleware)]
+    (with-meta f
+      (meta middleware)
+      #_(cond-> {}
+        requires (assoc ::requires (set requires) #_(into #{} (map requiring-resolve) requires))
+        expects (assoc ::expects (set expects) #_(into #{} (map requiring-resolve) expects))))))
