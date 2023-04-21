@@ -137,14 +137,12 @@ value:
     babashka.nrepl.server/start-server!)
 ```
 
-## User middleware
+<!-- ## User middleware (WIP) -->
 
-User-land middleware can be passed via the `:middleware` option of
-`start-server!`.  This should be a seq of fully qualified symbols that are
-resolvable by SCI. Each symbol should be a function in the style of a
-middleware wrapper.
-
-<!-- TODO: mode docs -->
+<!-- User-land middleware can be passed via the `:middleware` option of -->
+<!-- `start-server!`.  This should be a seq of fully qualified symbols that are -->
+<!-- resolvable by SCI. Each symbol should be a function in the style of a -->
+<!-- middleware wrapper. -->
 
 ## Authors
 
