@@ -634,7 +634,7 @@
           sci-requests-log @(sci/eval-string*
                              ctx
                              "(defonce requests-log (atom []))")
-          sci-respones-log @(sci/eval-string*
+          sci-responses-log @(sci/eval-string*
                              ctx
                              "(defonce responses-log (atom []))")
           _ (sci/eval-string*
@@ -674,7 +674,7 @@
       (is (= @sci-requests-log [{:op :foo, :bar "hasdf", :foo "yay"} {:op :baz, :baz 41}]))
       (is
        (=
-        @sci-respones-log
+        @sci-responses-log
         [{"status" #{"error" "unknown-op" "done"},
           "session" "none",
           "id" "unknown"}
