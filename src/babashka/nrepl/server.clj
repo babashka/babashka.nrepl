@@ -20,27 +20,14 @@
     {:host host
      :port port}))
 
-(defn ->sci-var [sci-ctx sym]
-  (or (sci/eval-form sci-ctx `(requiring-resolve '~sym))
-      (throw (Exception. (str "Failed to resolve " sym)))))
-
-(defn ->user-middleware [sci-ctx middleware]
-  (sequence
-   (comp
-    (map #(->sci-var sci-ctx %))
-    (map #(middleware/middleware->transducer sci-ctx %)))
-   middleware))
-
-(defn start-server! [ctx & [{:keys [host port quiet middleware]
+(defn start-server! [ctx & [{:keys [host port quiet]
                              :or {host "0.0.0.0"
                                   port 1667}
                              :as opts}]]
   (let [ctx (assoc ctx :sessions (atom #{}))
         opts (assoc opts :xform
                     (get opts :xform
-                         (middleware/middleware->xform
-                          (into middleware/default-middleware
-                                (->user-middleware ctx middleware)))))
+                         middleware/default-xform))
         inet-address (java.net.InetAddress/getByName host)
         socket-server (new ServerSocket port 0 inet-address)]
     (when-not quiet

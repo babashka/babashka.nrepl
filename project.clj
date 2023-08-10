@@ -8,7 +8,7 @@
             :url "https://www.eclipse.org/legal/epl-1.0/"}
   :dependencies [[org.clojure/clojure "1.10.2-alpha1"]
                  [nrepl/bencode "1.1.0"]
-                 [org.babashka/sci "0.7.39"]]
+                 [org.babashka/sci "0.3.2"]]
   :deploy-repositories [["clojars" {:url "https://clojars.org/repo"
                                     :username :env/babashka_nrepl_clojars_user
                                     :password :env/babashka_nrepl_clojars_pass
