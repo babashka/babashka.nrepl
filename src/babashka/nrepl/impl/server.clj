@@ -2,6 +2,7 @@
   {:author "Michiel Borkent"
    :no-doc true}
   (:require
+   [babashka.impl.classpath :as cp]
    [babashka.nrepl.impl.utils :as utils]
    [bencode.core :refer [read-bencode]]
    [clojure.pprint :as pprint]
@@ -346,10 +347,10 @@
 (def babashka-nrepl-version "0.0.6-SNAPSHOT")
 
 (defmulti process-msg
-  (fn [rf result m]
+  (fn [_rf _result m]
     (-> m :msg :op)))
 
-(defmethod process-msg :clone [rf result {:keys [ctx msg opts] :as m}]
+(defmethod process-msg :clone [rf result {:keys [ctx msg opts] :as _m}]
   (when (:debug opts) (println "Cloning!"))
   (let [id (str (java.util.UUID/randomUUID))]
     (swap! (:sessions ctx) (fnil conj #{}) id)
@@ -357,13 +358,13 @@
                 :response-for msg
                 :opts opts})))
 
-(defmethod process-msg :close [rf result {:keys [ctx msg opts] :as m}]
+(defmethod process-msg :close [rf result m]
   (close-session rf result m))
 
 (defmethod process-msg :eval [rf result m]
   (eval-msg rf result m))
 
-(defmethod process-msg :load-file [rf result {:keys [ctx msg opts] :as m}]
+(defmethod process-msg :load-file [rf result {:keys [msg] :as m}]
   (let [file (:file msg)
         msg (assoc msg
                    :code file
@@ -372,7 +373,7 @@
                    :load-file true)]
     (eval-msg rf result (assoc m :msg msg))))
 
-(defmethod process-msg :complete [rf result {:keys [ctx msg opts] :as m}]
+(defmethod process-msg :complete [rf result m]
   (complete rf result m))
 
 (defmethod process-msg :lookup [rf result m]
@@ -381,7 +382,7 @@
 (defmethod process-msg :info [rf result m]
   (lookup rf result m))
 
-(defmethod process-msg :describe [rf result {:keys [msg opts] :as m}]
+(defmethod process-msg :describe [rf result {:keys [msg opts] :as _m}]
   (rf result {:response (merge-with merge
                                     {"status" #{"done"}
                                      "ops" (zipmap #{"clone" "close" "eval" "load-file"
@@ -399,6 +400,11 @@
 (defmethod process-msg :eldoc [rf result m]
   (lookup rf result m))
 
+(defmethod process-msg :classpath [rf result m]
+  (rf result {:response {"status" ["done"]
+                         "classpath" (cp/split-classpath (cp/get-classpath))}
+              :response-for (:msg m)}))
+
 (defmethod process-msg :default [rf result {:keys [opts msg]}]
   (when (:debug opts)
     (println "Unhandled message" msg))
@@ -413,7 +419,7 @@
                       (catch EOFException _
                         (when-not (:quiet opts)
                           (println "Client closed connection."))))]
-    (let [response (rf os {:msg msg
+    (let [_response (rf os {:msg msg
                            :opts opts
                            :ctx ctx})])
     (recur rf is os m)))
