@@ -293,14 +293,24 @@
         (sci/binding [sci/ns (or sci-ns @sci/ns)]
           (let [m (sci/eval-string* ctx (format "
 (let [ns '%s
-      full-sym '%s]
+      full-sym '%s
+      resource-fn (resolve 'clojure.java.io/resource)
+      file-fn (resolve 'clojure.java.io/file)
+      as-url-fn (resolve 'clojure.java.io/as-url)]
   (when-let [v (ns-resolve ns full-sym)]
     (let [m (meta v)]
       (assoc m :arglists (:arglists m)
        :doc (:doc m)
        :name (:name m)
        :ns (some-> m :ns ns-name)
-       :val @v))))" ns-str sym-str))
+       :val @v
+       :file (let [file (:file m)]
+               (if resource-fn
+                 ;; turn jar file into URL string
+                 (str (or (when resource-fn (some-> file resource-fn))
+                      (when (and file-fn as-url-fn) (some-> file file-fn as-url-fn))
+                      file))
+                 file))))))" ns-str sym-str))
                 doc (:doc m)
                 file (:file m)
                 line (:line m)

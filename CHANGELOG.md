@@ -2,6 +2,10 @@
 
 All notable changes to this project will be documented in this file. This changelog follows the conventions of [keepachangelog.com](http://keepachangelog.com/).
 
+## Unreleased
+
+- #65: return URL in lookup op
+
 ## [0.0.7] - 2022-11-27
 
 - Fix #59: don't emit newline with cider pprint function is used
