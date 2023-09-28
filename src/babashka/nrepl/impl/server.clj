@@ -2,7 +2,6 @@
   {:author "Michiel Borkent"
    :no-doc true}
   (:require
-   [babashka.impl.classpath :as cp]
    [babashka.nrepl.impl.utils :as utils]
    [bencode.core :refer [read-bencode]]
    [clojure.pprint :as pprint]
@@ -399,11 +398,6 @@
 
 (defmethod process-msg :eldoc [rf result m]
   (lookup rf result m))
-
-(defmethod process-msg :classpath [rf result m]
-  (rf result {:response {"status" ["done"]
-                         "classpath" (cp/split-classpath (cp/get-classpath))}
-              :response-for (:msg m)}))
 
 (defmethod process-msg :default [rf result {:keys [opts msg]}]
   (when (:debug opts)
