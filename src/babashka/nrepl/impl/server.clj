@@ -394,9 +394,13 @@
 (defmethod process-msg :describe [rf result {:keys [msg opts] :as m}]
   (rf result {:response (merge-with merge
                                     {"status" #{"done"}
-                                     "ops" (zipmap #{"clone" "close" "eval" "load-file"
-                                                     "complete" "describe" "ls-sessions"
-                                                     "eldoc" "info" "lookup"}
+                                     "ops" (zipmap (cond-> #{"clone" "close" "eval" "load-file"
+                                                            "complete" "describe" "ls-sessions"
+                                                             "eldoc" "info" "lookup"}
+                                                     (and (get-method process-msg :classpath)
+                                                          (not= (get-method process-msg :classpath)
+                                                                (get-method process-msg :default)))
+                                                     (conj "classpath"))
                                                    (repeat {}))
                                      "versions" {"babashka.nrepl" babashka-nrepl-version}}
                                     (:describe opts))

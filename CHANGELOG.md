@@ -5,6 +5,7 @@ All notable changes to this project will be documented in this file. This change
 ## Unreleased
 
 - #65: return URL in lookup op
+- Fix #68: classpath op in describe
 
 ## [0.0.7] - 2022-11-27
 
