@@ -396,7 +396,7 @@
                                     {"status" #{"done"}
                                      "ops" (zipmap (cond-> #{"clone" "close" "eval" "load-file"
                                                             "complete" "describe" "ls-sessions"
-                                                             "eldoc" "info" "lookup"}
+                                                             "eldoc" "info" "lookup" "ns-list"}
                                                      (and (get-method process-msg :classpath)
                                                           (not= (get-method process-msg :classpath)
                                                                 (get-method process-msg :default)))
