@@ -407,6 +407,21 @@
               :response-for msg
               :opts opts}))
 
+(defmethod process-msg :ns-list [rf result {:keys [ctx msg opts] :as _m}]
+  (rf result {:response {"status" #{"done"}
+                         "ns-list" (let [ns-list (sci/eval-string* ctx "
+(->> (all-ns)
+     (map ns-name)
+     (map name) (sort))")
+                                         regexps (mapv #(re-pattern (String. (bytes %)))
+                                                       (get msg :exclude-patterns))
+                                         ns-list (remove (fn [ns]
+                                                           (some #(re-find % ns) regexps))
+                                                       ns-list)]
+                                     ns-list)}
+              :response-for msg
+              :opts opts}))
+
 (defmethod process-msg :ls-sessions [rf result m]
   (ls-sessions rf result m))
 
