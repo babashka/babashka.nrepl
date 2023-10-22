@@ -99,7 +99,7 @@
           (bencode/write-bencode os {"op" "eval" "code" "[*2 *1]" "session" session "id" (new-id!)})
           (let [msg (read-reply in session @id)
                 value (:value msg)]
-            (is (= "[6 16]" value ))))
+            (is (= "[6 16]" value))))
         (bencode/write-bencode os {"op" "eval"
                                    "code" "(do (require '[clojure.test :refer [*x*]]) *x*)"
                                    "session" session "id" (new-id!)})
@@ -124,13 +124,13 @@
             (is (= ":foo0" (:value (read-reply in session @id)))))
           ;; TODO: I don't remember why we created the ns...
           #_(testing "providing an ns value of a non-existing namespace creates the namespace"
-            (bencode/write-bencode os {"op" "eval"
-                                       "code" "(ns-name *ns*)"
-                                       "session" session
-                                       "id" (new-id!)
-                                       "ns" "unicorn"})
-            (let [reply (read-reply in session @id)]
-              (is (= "unicorn" (:value reply))))))
+              (bencode/write-bencode os {"op" "eval"
+                                         "code" "(ns-name *ns*)"
+                                         "session" session
+                                         "id" (new-id!)
+                                         "ns" "unicorn"})
+              (let [reply (read-reply in session @id)]
+                (is (= "unicorn" (:value reply))))))
         (testing "multiple top level expressions results in two value replies"
           (bencode/write-bencode os {"op" "eval"
                                      "code" "(+ 1 2 3) (+ 1 2 3)"
@@ -282,7 +282,7 @@
         (testing "output not truncating"
           (let [large-block
                 (apply str
-                       (repeatedly 5000  ;; bigger than the 1024 buffer size
+                       (repeatedly 5000 ;; bigger than the 1024 buffer size
                                    #(rand-nth
                                      (seq "abcdefghijklmnopqrstuvwxyz ☂☀\t "))))]
             (bencode/write-bencode os {"op" "eval" "code" (format "(print \"%s\")" large-block)
@@ -320,7 +320,7 @@
         (testing "error not truncating"
           (let [large-block
                 (apply str
-                       (repeatedly 5000  ;; bigger than the 1024 buffer size
+                       (repeatedly 5000 ;; bigger than the 1024 buffer size
                                    #(rand-nth
                                      (seq "abcdefghijklmnopqrstuvwxyz ☂☀\t "))))]
             (bencode/write-bencode os {"op" "eval" "code" (format "(binding [*out* *err*] (print \"%s\"))" large-block)
@@ -410,11 +410,16 @@
         (testing "exception value"
           ;; TODO:
           #_(bencode/write-bencode os {"op" "eval" "code" "(nth [] 3)"
-                                     "session" session "id" (new-id!)})
+                                       "session" session "id" (new-id!)})
           #_(is (= "java.lang.IndexOutOfBoundsException core REPL:1:1\n" (:err (read-reply in session @id))))
           (bencode/write-bencode os {"op" "eval" "code" "(assert nil \"oops\")"
                                      "session" session "id" (new-id!)})
-          (is (str/includes? (:err (read-reply in session @id))  "Assert failed: oops")))))))
+          (is (str/includes? (:err (read-reply in session @id)) "Assert failed: oops")))
+        (testing "ns-list"
+          (bencode/write-bencode os {"op" "ns-list" "exclude-patterns" ["^clojure.core"]
+                                     "session" session "id" (new-id!)})
+          (contains? (set (map bytes->str (:ns-list (read-reply in session @id))))
+                     "clojure.walk"))))))
 
 (deftest nrepl-server-test
   (let [service (atom nil)]
@@ -495,7 +500,7 @@
          (swap! responses-log conj (:response response))
          response)))
 
-(defonce requests-log (atom [] ))
+(defonce requests-log (atom []))
 (def
   ^{::middleware/requires #{#'middleware/wrap-read-msg}
     ::middleware/expects #{#'middleware/wrap-process-message}}
@@ -578,43 +583,43 @@
                 :response))))
 
     (testing "add extra ops via middleware"
-     (let [{:keys [ctx bindings opts]} (test-server-config)
-           responses (server-responses ctx bindings opts
-                                       (middleware/default-middleware-with-extra-ops
-                                        {:foo (fn [rf result request]
-                                                (-> result
-                                                    (rf {:response {:foo-echo (-> request :msg :foo)}
-                                                         :response-for request})
-                                                    (rf {:response {:bar-echo (-> request :msg :bar)}
-                                                         :response-for request})))
-                                         :baz (fn [rf result request]
-                                                (-> result
-                                                    (rf {:response {:baz-echo (-> request :msg :baz inc)}
-                                                         :response-for request})))})
-                                       [{"op" "foo"
-                                         "bar" "hasdf"
-                                         "foo" "yay"}
-                                        {"op" "baz"
-                                         "baz" 41}])]
-       (is (= '({:foo-echo "yay", "session" "none", "id" "unknown"}
-                {:bar-echo "hasdf", "session" "none", "id" "unknown"}
-                {:baz-echo 42, "session" "none", "id" "unknown"})
-              (map :response responses)))))
+      (let [{:keys [ctx bindings opts]} (test-server-config)
+            responses (server-responses ctx bindings opts
+                                        (middleware/default-middleware-with-extra-ops
+                                         {:foo (fn [rf result request]
+                                                 (-> result
+                                                     (rf {:response {:foo-echo (-> request :msg :foo)}
+                                                          :response-for request})
+                                                     (rf {:response {:bar-echo (-> request :msg :bar)}
+                                                          :response-for request})))
+                                          :baz (fn [rf result request]
+                                                 (-> result
+                                                     (rf {:response {:baz-echo (-> request :msg :baz inc)}
+                                                          :response-for request})))})
+                                        [{"op" "foo"
+                                          "bar" "hasdf"
+                                          "foo" "yay"}
+                                         {"op" "baz"
+                                          "baz" 41}])]
+        (is (= '({:foo-echo "yay", "session" "none", "id" "unknown"}
+                 {:bar-echo "hasdf", "session" "none", "id" "unknown"}
+                 {:baz-echo 42, "session" "none", "id" "unknown"})
+               (map :response responses)))))
 
     (testing "add logging middleware"
       (let [{:keys [ctx bindings opts]} (test-server-config)
             _ (reset! requests-log [])
             _ (reset! responses-log [])
-            responses (server-responses ctx bindings opts
-                                        (middleware/middleware->xform
-                                         (conj middleware/default-middleware
-                                               #'log-requests
-                                               #'log-responses))
-                                        [{"op" "foo"
-                                          "bar" "hasdf"
-                                          "foo" "yay"}
-                                         {"op" "baz"
-                                         "baz" 41}])]
+            _responses (server-responses ctx bindings opts
+                                         (middleware/middleware->xform
+                                          (conj middleware/default-middleware
+                                                #'log-requests
+                                                #'log-responses))
+                                         [{"op" "foo"
+                                           "bar" "hasdf"
+                                           "foo" "yay"}
+                                          {"op" "baz"
+                                           "baz" 41}])]
         (is (= @requests-log
                [{:op :foo, :bar "hasdf", :foo "yay"}
                 {:op :baz, :baz 41}]))
@@ -624,5 +629,4 @@
 
 ;;;; Scratch
 
-(comment
-  )
+(comment)

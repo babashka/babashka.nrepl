@@ -396,7 +396,7 @@
                                     {"status" #{"done"}
                                      "ops" (zipmap (cond-> #{"clone" "close" "eval" "load-file"
                                                             "complete" "describe" "ls-sessions"
-                                                             "eldoc" "info" "lookup"}
+                                                             "eldoc" "info" "lookup" "ns-list"}
                                                      (and (get-method process-msg :classpath)
                                                           (not= (get-method process-msg :classpath)
                                                                 (get-method process-msg :default)))
@@ -404,6 +404,21 @@
                                                    (repeat {}))
                                      "versions" {"babashka.nrepl" babashka-nrepl-version}}
                                     (:describe opts))
+              :response-for msg
+              :opts opts}))
+
+(defmethod process-msg :ns-list [rf result {:keys [ctx msg opts] :as _m}]
+  (rf result {:response {"status" #{"done"}
+                         "ns-list" (let [ns-list (sci/eval-string* ctx "
+(->> (all-ns)
+     (map ns-name)
+     (map name) (sort))")
+                                         regexps (mapv #(re-pattern (String. (bytes %)))
+                                                       (get msg :exclude-patterns))
+                                         ns-list (remove (fn [ns]
+                                                           (some #(re-find % ns) regexps))
+                                                       ns-list)]
+                                     ns-list)}
               :response-for msg
               :opts opts}))
 
