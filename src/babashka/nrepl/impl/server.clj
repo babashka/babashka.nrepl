@@ -89,7 +89,8 @@
           _ (when (:debug opts)
               (prn :msg msg))
           err-pw (make-writer rf result msg "err")
-          out-pw (make-writer rf result msg "out")]
+          out-pw (make-writer rf result msg "out")
+          test-out (sci/resolve ctx 'clojure.test/*test-out*)]
       (when debug (println "current ns" (str @sci/ns)))
       (sci/with-bindings (cond-> {sci/*1 *1
                                   sci/*2 *2
@@ -97,6 +98,7 @@
                                   sci/*e *e
                                   sci/out out-pw
                                   sci/err err-pw}
+                           test-out (assoc test-out out-pw)
                            file (assoc sci/file file)
                            load-file? (assoc sci/ns @sci/ns)
                            sci-ns (assoc sci/ns sci-ns))

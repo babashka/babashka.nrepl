@@ -1,4 +1,4 @@
-(defproject babashka/babashka.nrepl "0.0.7"
+(defproject babashka/babashka.nrepl "0.0.8"
   ;; run (bb | clojure) script/update_version.clj to update this version
   :description "babashka nREPL module"
   :url "https://github.com/babashka/babashka.nrepl"
@@ -6,9 +6,9 @@
         :url "https://github.com/babashka/babashka.nrepl"}
   :license {:name "EPL-1.0"
             :url "https://www.eclipse.org/legal/epl-1.0/"}
-  :dependencies [[org.clojure/clojure "1.10.2-alpha1"]
+  :dependencies [[org.clojure/clojure "1.10.3"]
                  [nrepl/bencode "1.1.0"]
-                 [org.babashka/sci "0.3.2"]]
+                 [org.babashka/sci "0.10.49"]]
   :deploy-repositories [["clojars" {:url "https://clojars.org/repo"
                                     :username :env/babashka_nrepl_clojars_user
                                     :password :env/babashka_nrepl_clojars_pass

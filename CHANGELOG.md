@@ -7,6 +7,7 @@ All notable changes to this project will be documented in this file. This change
 - #65: return URL in lookup op
 - Fix #68: classpath op in describe
 - #69: `ns-list` op
+- Bind `clojure.test/*test-out*` from SCI context to same print-writer as `sci/out` is bound to, if it exists. See babashka [issue](https://github.com/babashka/babashka/issues/1690).
 
 ## [0.0.7] - 2022-11-27
 
