@@ -181,70 +181,71 @@
             (is (= "user" (:value (read-reply in session @id)))))
           (bencode/write-bencode os {"op" "eval" "code" "(foo)" "ns" "foo" "session" session "id" (new-id!)})
           (is (= ":foo" (:value (read-reply in session @id)))))
-        (testing "complete"
-          (testing "completions for fo"
-            (bencode/write-bencode os {"op" "complete"
-                                       "symbol" "fo"
-                                       "session" session
-                                       "id" (new-id!)
-                                       "ns" "foo"})
-            (let [reply (read-reply in session @id)
-                  completions (:completions reply)
-                  completions (mapv read-msg completions)
-                  completions (into #{} (map (juxt :ns :candidate)) completions)]
-              (is (contains? completions ["foo" "foo"]))
-              (is (contains? completions ["clojure.core" "format"]))))
-          (testing "completions for quux should be empty"
-            (bencode/write-bencode os {"op" "complete"
-                                       "symbol" "quux"
-                                       "session" session "id" (new-id!)
-                                       "ns" "foo"})
-            (let [reply (read-reply in session @id)
-                  completions (:completions reply)]
-              (is (empty? completions)))
-            (testing "unless quux is an alias"
-              (bencode/write-bencode os {"op" "eval" "code" "(require '[cheshire.core :as quux])" "session" session "id" (new-id!)})
-              (read-reply in session @id)
-              (bencode/write-bencode os {"op" "complete" "symbol" "quux" "session" session "id" (new-id!)})
+        (doseq [op ["complete" "completions"]]
+          (testing op
+            (testing "completions for fo"
+              (bencode/write-bencode os {"op" op
+                                         "symbol" "fo"
+                                         "session" session
+                                         "id" (new-id!)
+                                         "ns" "foo"})
               (let [reply (read-reply in session @id)
                     completions (:completions reply)
                     completions (mapv read-msg completions)
                     completions (into #{} (map (juxt :ns :candidate)) completions)]
-                (is (contains? completions ["cheshire.core" "quux/generate-string"])))))
-          (testing "completions for clojure.test"
-            (bencode/write-bencode os {"op" "eval" "code" "(require '[clojure.test :as test])" "session" session "id" (new-id!)})
-            (read-reply in session @id)
-            (bencode/write-bencode os {"op" "complete" "symbol" "test" "session" session "id" (new-id!)})
-            (let [reply (read-reply in session @id)
-                  completions (:completions reply)
-                  completions (mapv read-msg completions)
-                  completions (into #{} (map (juxt :ns :candidate)) completions)]
-              (is (contains? completions ["clojure.test" "test/deftest"]))))
-          (testing "completions for vars containing regex chars"
-            (bencode/write-bencode os {"op" "complete" "symbol" "+" "session" session "id" (new-id!)})
-            (let [reply (read-reply in session @id)
-                  completions (:completions reply)
-                  completions (mapv read-msg completions)
-                  completions (into #{} (map (juxt :ns :candidate)) completions)]
-              (is (contains? completions ["clojure.core" "+"]))
-              (is (contains? completions ["clojure.core" "+'"]))))
-          (testing "completions for static interop"
-            (bencode/write-bencode os {"op" "complete" "symbol" "java.lang.String/" "session" session "id" (new-id!)})
-            (let [reply (read-reply in session @id)
-                  completions (:completions reply)
-                  completions (mapv read-msg completions)
-                  completions (into #{} (map (juxt :ns :candidate)) completions)]
-              (is (contains? completions ["java.lang.String" "java.lang.String/copyValueOf"]))
-              (is (contains? completions ["java.lang.String" "java.lang.String/CASE_INSENSITIVE_ORDER"]))
-              (is (contains? completions ["java.lang.String" "java.lang.String/join"]))))
-          (testing "completions for imports"
-            (bencode/write-bencode os {"debug" "true" "op" "complete" "symbol" "Stri" "session" session "id" (new-id!)})
-            (let [reply (read-reply in session @id)
-                  completions (:completions reply)
-                  completions (mapv read-msg completions)
-                  completions (into #{} (map (juxt :ns :candidate)) completions)]
-              (is (contains? completions [nil "String"]))
-              (is (contains? completions [nil "java.lang.String"])))))
+                (is (contains? completions ["foo" "foo"]))
+                (is (contains? completions ["clojure.core" "format"]))))
+            (testing "completions for quux should be empty"
+              (bencode/write-bencode os {"op" op
+                                         "symbol" "quux"
+                                         "session" session "id" (new-id!)
+                                         "ns" "foo"})
+              (let [reply (read-reply in session @id)
+                    completions (:completions reply)]
+                (is (empty? completions)))
+              (testing "unless quux is an alias"
+                (bencode/write-bencode os {"op" "eval" "code" "(require '[cheshire.core :as quux])" "session" session "id" (new-id!)})
+                (read-reply in session @id)
+                (bencode/write-bencode os {"op" op "symbol" "quux" "session" session "id" (new-id!)})
+                (let [reply (read-reply in session @id)
+                      completions (:completions reply)
+                      completions (mapv read-msg completions)
+                      completions (into #{} (map (juxt :ns :candidate)) completions)]
+                  (is (contains? completions ["cheshire.core" "quux/generate-string"])))))
+            (testing "completions for clojure.test"
+              (bencode/write-bencode os {"op" "eval" "code" "(require '[clojure.test :as test])" "session" session "id" (new-id!)})
+              (read-reply in session @id)
+              (bencode/write-bencode os {"op" op "symbol" "test" "session" session "id" (new-id!)})
+              (let [reply (read-reply in session @id)
+                    completions (:completions reply)
+                    completions (mapv read-msg completions)
+                    completions (into #{} (map (juxt :ns :candidate)) completions)]
+                (is (contains? completions ["clojure.test" "test/deftest"]))))
+            (testing "completions for vars containing regex chars"
+              (bencode/write-bencode os {"op" op "symbol" "+" "session" session "id" (new-id!)})
+              (let [reply (read-reply in session @id)
+                    completions (:completions reply)
+                    completions (mapv read-msg completions)
+                    completions (into #{} (map (juxt :ns :candidate)) completions)]
+                (is (contains? completions ["clojure.core" "+"]))
+                (is (contains? completions ["clojure.core" "+'"]))))
+            (testing "completions for static interop"
+              (bencode/write-bencode os {"op" op "symbol" "java.lang.String/" "session" session "id" (new-id!)})
+              (let [reply (read-reply in session @id)
+                    completions (:completions reply)
+                    completions (mapv read-msg completions)
+                    completions (into #{} (map (juxt :ns :candidate)) completions)]
+                (is (contains? completions ["java.lang.String" "java.lang.String/copyValueOf"]))
+                (is (contains? completions ["java.lang.String" "java.lang.String/CASE_INSENSITIVE_ORDER"]))
+                (is (contains? completions ["java.lang.String" "java.lang.String/join"]))))
+            (testing "completions for imports"
+              (bencode/write-bencode os {"debug" "true" "op" op "symbol" "Stri" "session" session "id" (new-id!)})
+              (let [reply (read-reply in session @id)
+                    completions (:completions reply)
+                    completions (mapv read-msg completions)
+                    completions (into #{} (map (juxt :ns :candidate)) completions)]
+                (is (contains? completions [nil "String"]))
+                (is (contains? completions [nil "java.lang.String"]))))))
         (testing (bencode/write-bencode os {"op" "ls-sessions" "session" session "id" (new-id!)})
           "close + ls-sessions"
           (let [reply (read-reply in session @id)

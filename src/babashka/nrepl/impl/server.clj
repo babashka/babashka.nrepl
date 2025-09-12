@@ -392,18 +392,22 @@
 (defmethod process-msg :complete [rf result {:keys [ctx msg opts] :as m}]
   (complete rf result m))
 
+(defmethod process-msg :completions [rf result {:keys [ctx msg opts] :as m}]
+  (complete rf result m))
+
 (defmethod process-msg :lookup [rf result m]
   (lookup rf result m))
 
 (defmethod process-msg :info [rf result m]
   (lookup rf result m))
 
-(defmethod process-msg :describe [rf result {:keys [msg opts] :as m}]
+(defmethod process-msg :describe [rf result {:keys [msg opts] :as _m}]
   (rf result {:response (merge-with merge
                                     {"status" #{"done"}
                                      "ops" (zipmap (cond-> #{"clone" "close" "eval" "load-file"
-                                                            "complete" "describe" "ls-sessions"
-                                                             "eldoc" "info" "lookup" "ns-list"}
+                                                             "complete" "completions" "describe"
+                                                             "ls-sessions" "eldoc" "info" "lookup"
+                                                             "ns-list"}
                                                      (and (get-method process-msg :classpath)
                                                           (not= (get-method process-msg :classpath)
                                                                 (get-method process-msg :default)))
