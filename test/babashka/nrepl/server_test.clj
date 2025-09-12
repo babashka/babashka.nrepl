@@ -34,17 +34,23 @@
   (if (bytes? x) (String. (bytes x))
       (str x)))
 
-(defn read-msg [msg]
-  (let [res (zipmap (map keyword (keys msg))
+(defn- coerce-map [msg]
+  (zipmap (map keyword (keys msg))
                     (map #(if (bytes? %)
                             (String. (bytes %))
                             %)
-                         (vals msg)))
+                         (vals msg))))
+
+(defn read-msg [msg]
+  (let [res (coerce-map msg)
         res (if-let [status (:status res)]
               (assoc res :status (mapv bytes->str status))
               res)
         res (if-let [status (:sessions res)]
               (assoc res :sessions (mapv bytes->str status))
+              res)
+        res (if-let [info (:info res)]
+              (assoc res :info (coerce-map info))
               res)]
     res))
 
@@ -379,30 +385,35 @@
                                        "session" session "id" (new-id!)})
             (let [{:keys [status]} (read-reply in session @id)]
               (is (contains? (set status) "no-eldoc")))))
-        (testing "lookup"
-          (testing "lookup of inc"
-            (bencode/write-bencode os {"op" "lookup" "ns" "user"
-                                       "symbol" "inc"
-                                       "session" session "id" (new-id!)})
-            (let [{:keys [doc arglists-str]} (read-reply in session @id)]
-              (is (str/includes? doc "Returns a number one greater than num"))
-              (is (= "[x]" arglists-str))))
-          (testing "lookup of last-index-of"
-            (bencode/write-bencode os {"op" "lookup" "ns" "user"
-                                       "symbol" "clojure.string/last-index-of"
-                                       "session" session "id" (new-id!)})
-            (let [{:keys [doc arglists-str]} (read-reply in session @id)]
-              (is (str/includes? doc "Return last index of value (string or char) in s"))
-              (is (= "[s value]\n[s value from-index]" arglists-str))))
-          (testing "lookup of s/lower-case (from core ns, aliased as s/, core passed as ns)"
-            (bencode/write-bencode os {"op" "eval" "code" "(ns core)
+        (testing "lookup + info"
+          (doseq [op ["lookup" "info"]]
+            (testing "lookup of inc"
+              (bencode/write-bencode os {"op" op "ns" "user"
+                                         "symbol" "inc"
+                                         "session" session "id" (new-id!)})
+              (let [reply (cond-> (read-reply in session @id)
+                            (= "lookup" op) :info)
+                    {:keys [doc arglists-str]} reply]
+                (is (str/includes? doc "Returns a number one greater than num"))
+                (is (= "[x]" arglists-str))))
+            (testing "lookup of last-index-of"
+              (bencode/write-bencode os {"op" op "ns" "user"
+                                         "symbol" "clojure.string/last-index-of"
+                                         "session" session "id" (new-id!)})
+              (let [{:keys [doc arglists-str]} (cond-> (read-reply in session @id)
+                                                 (= "lookup" op) :info)]
+                (is (str/includes? doc "Return last index of value (string or char) in s"))
+                (is (= "[s value]\n[s value from-index]" arglists-str))))
+            (testing "lookup of s/lower-case (from core ns, aliased as s/, core passed as ns)"
+              (bencode/write-bencode os {"op" "eval" "code" "(ns core)
                                                          (require '[clojure.string :as s])" "session" session "id" (new-id!)})
-            (bencode/write-bencode os {"op" "lookup" "ns" "core"
-                                       "symbol" "s/lower-case"
-                                       "session" session "id" (new-id!)})
-            (let [{:keys [doc arglists-str]} (read-reply in session @id)]
-              (is (str/includes? doc "Converts string to all lower-case"))
-              (is (= "[s]" arglists-str)))))
+              (bencode/write-bencode os {"op" op "ns" "core"
+                                         "symbol" "s/lower-case"
+                                         "session" session "id" (new-id!)})
+              (let [{:keys [doc arglists-str]} (cond-> (read-reply in session @id)
+                                                 (= "lookup" op) :info)]
+                (is (str/includes? doc "Converts string to all lower-case"))
+                (is (= "[s]" arglists-str))))))
         (testing "dynamic var can be set! if provided in :dynamic-vars option"
           (bencode/write-bencode os {"op" "eval" "code" "(set! *warn-on-reflection* true)"
                                      "session" session "id" (new-id!)})

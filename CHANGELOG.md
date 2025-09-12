@@ -2,6 +2,10 @@
 
 All notable changes to this project will be documented in this file. This changelog follows the conventions of [keepachangelog.com](http://keepachangelog.com/).
 
+## Unreleased
+
+- Fix #1863 part 1: `info` and `lookup` op. `lookup` carries nested `info` map whereas `info` is a flatmap.
+
 ## 0.0.8 (2025-09-04)
 
 - #65: return URL in lookup op

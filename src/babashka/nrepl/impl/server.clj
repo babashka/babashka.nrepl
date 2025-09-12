@@ -287,7 +287,7 @@
 (defn lookup [rf result {:keys [ctx msg opts]}]
   (let [ns-str (:ns msg)
         sym-str (or (:sym msg) (:symbol msg))
-        mapping-type (-> msg :op)
+        op (-> msg :op)
         debug (:debug opts)]
     (try
       (let [sci-ns (when ns-str
@@ -316,7 +316,7 @@
                 doc (:doc m)
                 file (:file m)
                 line (:line m)
-                reply (case mapping-type
+                reply (case op
                         :eldoc (cond->
                                    {"ns" (:ns m)
                                     "name" (:name m)
@@ -326,21 +326,26 @@
                                              :else "variable")
                                     "status" #{"done"}}
                                  doc (assoc "docstring" doc))
-                        (:info :lookup) (cond->
-                                            {"ns" (:ns m)
-                                             "name" (:name m)
-                                             "arglists-str" (forms-join (:arglists m))
-                                             "status" #{"done"}}
-                                          doc (assoc "doc" doc)
-                                          file (assoc "file" file)
-                                          line (assoc "line" line)))]
+                        (:info :lookup)
+                        (let [resp (cond->
+                                       {"ns" (:ns m)
+                                        "name" (:name m)
+                                        "arglists-str" (forms-join (:arglists m))
+                                        }
+                                     doc (assoc "doc" doc)
+                                     file (assoc "file" file)
+                                     line (assoc "line" line))
+                              resp (if (= :lookup op)
+                                     {"info" resp}
+                                     resp)]
+                          (assoc resp "status" #{"done"})))]
             (rf result {:response reply
                         :response-for msg
                         :opts opts}))))
       (catch Throwable e
         (when debug (println e))
         (let [status (cond-> #{"done"}
-                       (= mapping-type :eldoc)
+                       (= :eldoc op)
                        (conj "no-eldoc"))]
           (rf result
               {:response {"status" status}
