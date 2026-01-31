@@ -259,7 +259,14 @@
                     completions (:completions reply)
                     completions (mapv read-msg completions)
                     completions (into #{} (map (juxt :ns :candidate :type)) completions)]
-                (is (contains? completions ["String" "String/.equals" "method"]))))))
+                (is (contains? completions ["String" "String/.equals" "method"]))))
+            (testing "completions for constructors with /new"
+              (bencode/write-bencode os {"debug" "true" "op" op "symbol" "String/n" "session" session "id" (new-id!)})
+              (let [reply (read-reply in session @id)
+                    completions (:completions reply)
+                    completions (mapv read-msg completions)
+                    completions (into #{} (map (juxt :ns :candidate :type)) completions)]
+                (is (contains? completions ["String" "String/new" "constructor"]))))))
         (testing (bencode/write-bencode os {"op" "ls-sessions" "session" session "id" (new-id!)})
           "close + ls-sessions"
           (let [reply (read-reply in session @id)

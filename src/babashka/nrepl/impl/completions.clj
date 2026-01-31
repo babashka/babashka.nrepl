@@ -54,13 +54,20 @@
              (when (and has-slash? (re-find pat ns-qualified))
                [sym-ns ns-qualified])))))))
 
+(defn- member-simple-name
+  "Extracts simple name from a possibly qualified name (e.g., java.lang.String -> String)"
+  [s]
+  (let [idx (str/last-index-of s ".")]
+    (if idx (subs s (inc idx)) s)))
+
 (defn ns-imports->completions [ctx query-ns query]
   (let [[ns-part name-part] (str/split query #"/")
         resolved (sci/eval-string* ctx
                                    (pr-str `(let [resolved# (resolve '~query-ns)]
                                               (when-not (var? resolved#)
                                                 resolved#))))
-        pat (when name-part (re-pattern (java.util.regex.Pattern/quote name-part)))]
+        pat (when name-part (re-pattern (java.util.regex.Pattern/quote name-part)))
+        class-simple-name (when resolved (member-simple-name (str resolved)))]
     (when
      resolved
       (->>
@@ -72,18 +79,25 @@
          (filter (comp :public :flags))
          (filter (fn [{member-sym :name :keys [flags]}]
                    (let [static? (:static flags)
-                         member-str (if static?
-                                      (str member-sym)
-                                      (str "." member-sym))]
+                         simple-name (member-simple-name (str member-sym))
+                         constructor? (= simple-name class-simple-name)
+                         member-str (cond
+                                      constructor? "new"
+                                      static? (str member-sym)
+                                      :else (str "." member-sym))]
                      (or (not pat) (re-find pat member-str)))))
          (map
           (fn [{:keys [name parameter-types flags]}]
-            (let [static? (:static flags)]
+            (let [static? (:static flags)
+                  simple-name (member-simple-name (str name))
+                  constructor? (= simple-name class-simple-name)]
               [ns-part
-               (if static?
-                 (str ns-part "/" name)
-                 (str ns-part "/." name))
                (cond
+                 constructor? (str ns-part "/new")
+                 static? (str ns-part "/" name)
+                 :else (str ns-part "/." name))
+               (cond
+                 constructor? "constructor"
                  (and static? parameter-types) "static-method"
                  static? "static-field"
                  parameter-types "method"
