@@ -36,10 +36,10 @@
 
 (defn- coerce-map [msg]
   (zipmap (map keyword (keys msg))
-                    (map #(if (bytes? %)
-                            (String. (bytes %))
-                            %)
-                         (vals msg))))
+          (map #(if (bytes? %)
+                  (String. (bytes %))
+                  %)
+               (vals msg))))
 
 (defn read-msg [msg]
   (let [res (coerce-map msg)
@@ -245,7 +245,7 @@
                     completions (mapv read-msg completions)
                     completions (into #{} (map (juxt :ns :candidate)) completions)]
                 (is (contains? completions [nil "String"]))
-                (is (contains? completions [nil "java.lang.String"]))))))
+                (is (contains? completions ["java.lang.String" "String"]))))))
         (testing (bencode/write-bencode os {"op" "ls-sessions" "session" session "id" (new-id!)})
           "close + ls-sessions"
           (let [reply (read-reply in session @id)

@@ -17,9 +17,26 @@
         syms (sci/eval-string* ctx sym-expr)]
     syms))
 
+(defn- class-sym?
+  "Returns true if sym is a class import (e.g. clojure.lang.RT - has dots but no namespace)."
+  [sym]
+  (and (nil? (namespace sym))
+       (str/includes? (name sym) ".")))
+
+(defn- class-sym->completion
+  "Converts a class symbol like clojure.lang.RT to [full-class-name simple-name type]."
+  [sym]
+  (let [n (name sym)
+        idx (str/last-index-of n ".")]
+    [n
+     (subs n (inc idx))
+     "class"]))
+
 (defn match [_alias->ns ns->alias query [sym-ns sym-name qualifier]]
   (let [pat (re-pattern (java.util.regex.Pattern/quote query))]
-    (or (when (and (identical? :unqualified qualifier) (re-find pat sym-name))
+    (or (when (and (= "class" qualifier) (re-find pat sym-name))
+          [sym-ns sym-name "class"])
+        (when (and (identical? :unqualified qualifier) (re-find pat sym-name))
           [sym-ns sym-name])
         (when sym-ns
           (or (when (re-find pat (str (get ns->alias (symbol sym-ns)) "/" sym-name))
@@ -75,7 +92,9 @@
             query-ns (when has-namespace? (symbol (first (str/split query #"/"))))
             from-current-ns (fully-qualified-syms ctx (sci/eval-string* ctx "(ns-name *ns*)"))
             from-current-ns (map (fn [sym]
-                                   [(namespace sym) (name sym) :unqualified])
+                                   (if (class-sym? sym)
+                                     (class-sym->completion sym)
+                                     [(namespace sym) (name sym) :unqualified]))
                                  from-current-ns)
             alias->ns (sci/eval-string* ctx "(let [m (ns-aliases *ns*)] (zipmap (keys m) (map ns-name (vals m))))")
             ns->alias (zipmap (vals alias->ns) (keys alias->ns))
@@ -120,3 +139,9 @@
                           candidate])))})
       (catch Throwable e
         {:error e :completions []}))))
+
+(comment
+  (require '[sci.core :as sci])
+  (def ctx (sci/init {:classes {'clojure.lang.RT clojure.lang.RT}}))
+  (sci/eval-string* ctx "(import 'clojure.lang.RT)")
+  (completions ctx "RT"))
