@@ -245,7 +245,14 @@
                     completions (mapv read-msg completions)
                     completions (into #{} (map (juxt :ns :candidate)) completions)]
                 (is (contains? completions [nil "String"]))
-                (is (contains? completions ["java.lang.String" "String"]))))))
+                (is (contains? completions ["java.lang.String" "String"]))))
+            (testing "completions for fully qualified class names"
+              (bencode/write-bencode os {"debug" "true" "op" op "symbol" "java.lang.Stri" "session" session "id" (new-id!)})
+              (let [reply (read-reply in session @id)
+                    completions (:completions reply)
+                    completions (mapv read-msg completions)
+                    completions (into #{} (map (juxt :ns :candidate)) completions)]
+                (is (contains? completions ["java.lang.String" "java.lang.String"]))))))
         (testing (bencode/write-bencode os {"op" "ls-sessions" "session" session "id" (new-id!)})
           "close + ls-sessions"
           (let [reply (read-reply in session @id)

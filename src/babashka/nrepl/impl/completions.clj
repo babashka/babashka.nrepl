@@ -33,16 +33,26 @@
      "class"]))
 
 (defn match [_alias->ns ns->alias query [sym-ns sym-name qualifier]]
-  (let [pat (re-pattern (java.util.regex.Pattern/quote query))]
+  (let [pat (re-pattern (java.util.regex.Pattern/quote query))
+        has-slash? (str/includes? query "/")]
     (or (when (and (= "class" qualifier) (re-find pat sym-name))
           [sym-ns sym-name "class"])
         (when (and (identical? :unqualified qualifier) (re-find pat sym-name))
           [sym-ns sym-name])
-        (when sym-ns
-          (or (when (re-find pat (str (get ns->alias (symbol sym-ns)) "/" sym-name))
-                [sym-ns (str (get ns->alias (symbol sym-ns)) "/" sym-name)])
-              (when (re-find pat (str sym-ns "/" sym-name))
-                [sym-ns (str sym-ns "/" sym-name)]))))))
+        ;; Namespace-only entries (sym-name is nil) - match on namespace name
+        (when (and (nil? sym-name) sym-ns (re-find pat sym-ns))
+          [nil sym-ns "namespace"])
+        ;; Qualified symbol matching
+        (when (and sym-ns sym-name)
+          (let [alias (get ns->alias (symbol sym-ns))
+                alias-qualified (when alias (str alias "/" sym-name))
+                ns-qualified (str sym-ns "/" sym-name)]
+            (or ;; Always try alias-qualified matching (for `quux<TAB>` -> `quux/foo`)
+             (when (and alias-qualified (re-find pat alias-qualified))
+               [sym-ns alias-qualified])
+                ;; Full namespace-qualified matching only when query has a slash
+             (when (and has-slash? (re-find pat ns-qualified))
+               [sym-ns ns-qualified])))))))
 
 (defn ns-imports->completions [ctx query-ns query]
   (let [[ns-part name-part] (str/split query #"/")
@@ -81,6 +91,19 @@
        (map (fn [class-name]
               [nil (str class-name) "class"])))
       imports))))
+
+(defn fq-class->completions
+  "Completions for fully qualified class names like java.lang.String"
+  [classes query]
+  (let [pat (re-pattern (java.util.regex.Pattern/quote query))]
+    (doall
+     (sequence
+      (comp
+       (map key)
+       (map str)
+       (filter (fn [fq-class] (re-find pat fq-class)))
+       (map (fn [fq-class] [fq-class fq-class "class"])))
+      classes))))
 
 (defn completions
   "Returns completions for the given query string using the SCI context.
@@ -124,7 +147,9 @@
                               svs)
             completions (concat completions from-imports)
             import-symbols (import-symbols->completions (:imports @(:env ctx)) query)
-            completions (concat completions import-symbols)]
+            completions (concat completions import-symbols)
+            fq-classes (fq-class->completions (:raw-classes @(:env ctx)) query)
+            completions (concat completions fq-classes)]
         {:completions
          (->> (map (fn [[namespace name type]]
                      (cond->
