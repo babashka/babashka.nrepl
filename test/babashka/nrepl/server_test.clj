@@ -251,8 +251,8 @@
               (let [reply (read-reply in session @id)
                     completions (:completions reply)
                     completions (mapv read-msg completions)
-                    completions (into #{} (map (juxt :ns :candidate)) completions)]
-                (is (contains? completions ["java.lang.String" "java.lang.String"]))))))
+                    completions (into #{} (map (juxt :ns :candidate :type)) completions)]
+                (is (contains? completions ["java.lang.String" "java.lang.String" "class"]))))))
         (testing (bencode/write-bencode os {"op" "ls-sessions" "session" session "id" (new-id!)})
           "close + ls-sessions"
           (let [reply (read-reply in session @id)
