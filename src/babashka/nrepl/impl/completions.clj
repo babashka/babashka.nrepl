@@ -69,15 +69,25 @@
        (into
         []
         (comp
-         (filter (comp :static :flags))
          (filter (comp :public :flags))
-         (filter (fn [{member-sym :name}]
-                   (or (not pat) (re-find pat (str member-sym)))))
+         (filter (fn [{member-sym :name :keys [flags]}]
+                   (let [static? (:static flags)
+                         member-str (if static?
+                                      (str member-sym)
+                                      (str "." member-sym))]
+                     (or (not pat) (re-find pat member-str)))))
          (map
-          (fn [{:keys [name parameter-types]}]
-            [ns-part
-             (str ns-part "/" name)
-             (if parameter-types "static-method" "static-field")]))))))))
+          (fn [{:keys [name parameter-types flags]}]
+            (let [static? (:static flags)]
+              [ns-part
+               (if static?
+                 (str ns-part "/" name)
+                 (str ns-part "/." name))
+               (cond
+                 (and static? parameter-types) "static-method"
+                 static? "static-field"
+                 parameter-types "method"
+                 :else "field")])))))))))
 
 (defn import-symbols->completions [imports query]
   (let [pat (re-pattern (java.util.regex.Pattern/quote query))]

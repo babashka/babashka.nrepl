@@ -252,7 +252,14 @@
                     completions (:completions reply)
                     completions (mapv read-msg completions)
                     completions (into #{} (map (juxt :ns :candidate :type)) completions)]
-                (is (contains? completions ["java.lang.String" "java.lang.String" "class"]))))))
+                (is (contains? completions ["java.lang.String" "java.lang.String" "class"]))))
+            (testing "completions for instance methods with dot prefix"
+              (bencode/write-bencode os {"debug" "true" "op" op "symbol" "String/.eq" "session" session "id" (new-id!)})
+              (let [reply (read-reply in session @id)
+                    completions (:completions reply)
+                    completions (mapv read-msg completions)
+                    completions (into #{} (map (juxt :ns :candidate :type)) completions)]
+                (is (contains? completions ["String" "String/.equals" "method"]))))))
         (testing (bencode/write-bencode os {"op" "ls-sessions" "session" session "id" (new-id!)})
           "close + ls-sessions"
           (let [reply (read-reply in session @id)
