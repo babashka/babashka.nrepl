@@ -2,7 +2,7 @@
   {:author "Michiel Borkent"
    :no-doc true}
   (:require
-   [babashka.nrepl.impl.completions :as completions]
+   [babashka.nrepl.impl.sci :as sci-helpers]
    [babashka.nrepl.impl.utils :as utils]
    [bencode.core :refer [read-bencode]]
    [clojure.pprint :as pprint]
@@ -53,8 +53,6 @@
                (PrintWriter. true))]
     pw))
 
-(defn the-sci-ns [ctx ns-sym]
-  (sci/eval-form ctx (list 'clojure.core/the-ns (list 'quote ns-sym))))
 
 ;; :nrepl.middleware.print/options {"right-margin" 120, "length" 50, "level" 10}
 
@@ -84,7 +82,7 @@
                  (:file msg))
           reader (sci/reader code-str)
           ns-str (get msg :ns)
-          sci-ns (when ns-str (the-sci-ns ctx (symbol ns-str)))
+          sci-ns (when ns-str (sci-helpers/the-sci-ns ctx (symbol ns-str)))
           nrepl-pprint (:nrepl.middleware.print/print msg)
           _ (when (:debug opts)
               (prn :msg msg))
@@ -143,11 +141,11 @@
   (try
     (let [ns-str (get msg :ns)
           sci-ns (when ns-str
-                   (the-sci-ns ctx (symbol ns-str)))]
+                   (sci-helpers/the-sci-ns ctx (symbol ns-str)))]
       (sci/binding [sci/ns (or sci-ns @sci/ns)]
         (if-let [query (or (:symbol msg)
                            (:prefix msg))]
-          (let [{:keys [error completions]} (completions/completions ctx query)
+          (let [{:keys [error completions]} (sci-helpers/completions ctx query)
                 _ (when error (println error))
                 completions (map (fn [{:keys [candidate ns type]}]
                                    (cond-> {"candidate" candidate}
@@ -199,57 +197,36 @@
         op (-> msg :op)
         debug (:debug opts)]
     (try
-      (let [sci-ns (when ns-str
-                     (the-sci-ns ctx (symbol ns-str)))]
-        (sci/binding [sci/ns (or sci-ns @sci/ns)]
-          (let [m (sci/eval-string* ctx (format "
-(let [ns '%s
-      full-sym '%s
-      resource-fn (resolve 'clojure.java.io/resource)
-      file-fn (resolve 'clojure.java.io/file)
-      as-url-fn (resolve 'clojure.java.io/as-url)]
-  (when-let [v (ns-resolve ns full-sym)]
-    (let [m (meta v)]
-      (assoc m :arglists (:arglists m)
-       :doc (:doc m)
-       :name (:name m)
-       :ns (some-> m :ns ns-name)
-       :val @v
-       :file (let [file (:file m)]
-               (if resource-fn
-                 ;; turn jar file into URL string
-                 (str (or (when resource-fn (some-> file resource-fn))
-                      (when (and file-fn as-url-fn) (some-> file file-fn as-url-fn))
-                      file))
-                 file))))))" ns-str sym-str))
-                doc (:doc m)
-                file (:file m)
-                line (:line m)
-                reply (case op
-                        :eldoc (cond->
+      (let [m (or (sci-helpers/lookup ctx sym-str :ns-str ns-str)
+                  (throw (ex-info "Not found" {})))
+            doc (:doc m)
+            file (:file m)
+            line (:line m)
+            reply (case op
+                    :eldoc (cond->
+                            {"ns" (:ns m)
+                             "name" (:name m)
+                             "eldoc" (mapv #(mapv str %) (:arglists m))
+                             "type" (cond
+                                      (ifn? (:val m)) "function"
+                                      :else "variable")
+                             "status" #{"done"}}
+                             doc (assoc "docstring" doc))
+                    (:info :lookup)
+                    (let [resp (cond->
                                 {"ns" (:ns m)
                                  "name" (:name m)
-                                 "eldoc" (mapv #(mapv str %) (:arglists m))
-                                 "type" (cond
-                                          (ifn? (:val m)) "function"
-                                          :else "variable")
-                                 "status" #{"done"}}
-                                 doc (assoc "docstring" doc))
-                        (:info :lookup)
-                        (let [resp (cond->
-                                    {"ns" (:ns m)
-                                     "name" (:name m)
-                                     "arglists-str" (forms-join (:arglists m))}
-                                     doc (assoc "doc" doc)
-                                     file (assoc "file" file)
-                                     line (assoc "line" line))
-                              resp (if (= :lookup op)
-                                     {"info" resp}
-                                     resp)]
-                          (assoc resp "status" #{"done"})))]
-            (rf result {:response reply
-                        :response-for msg
-                        :opts opts}))))
+                                 "arglists-str" (forms-join (:arglists m))}
+                                 doc (assoc "doc" doc)
+                                 file (assoc "file" file)
+                                 line (assoc "line" line))
+                          resp (if (= :lookup op)
+                                 {"info" resp}
+                                 resp)]
+                      (assoc resp "status" #{"done"})))]
+        (rf result {:response reply
+                    :response-for msg
+                    :opts opts}))
       (catch Throwable e
         (when debug (println e))
         (let [status (cond-> #{"done"}
