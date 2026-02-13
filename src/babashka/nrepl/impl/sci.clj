@@ -156,6 +156,57 @@
               [nil (str class-name) "class"])))
       imports))))
 
+(def ^:private keyword-table
+  (delay
+    (let [f (.getDeclaredField clojure.lang.Keyword "table")]
+      (.setAccessible f true)
+      (.get f nil))))
+
+(defn keyword-completions
+  "Completions for keywords from the intern table.
+   Handles :foo, :ns/foo, ::foo (current ns), and ::alias/foo."
+  [ctx query]
+  (when (str/starts-with? query ":")
+    (let [^java.util.concurrent.ConcurrentHashMap table @keyword-table
+          double-colon? (str/starts-with? query "::")
+          after-colons (subs query (if double-colon? 2 1))
+          has-slash? (str/includes? after-colons "/")
+          alias-part (when (and double-colon? has-slash?)
+                       (first (str/split after-colons #"/")))
+          ;; Resolve :: prefix to actual namespace
+          resolved-ns (when double-colon?
+                        (if alias-part
+                          ;; ::alias/foo -> resolve alias
+                          (let [alias->ns (sci/eval-string* ctx
+                                            "(let [m (ns-aliases *ns*)]
+                                               (zipmap (map str (keys m))
+                                                       (map (comp str ns-name) (vals m))))")]
+                            (get alias->ns alias-part))
+                          ;; ::foo -> current namespace
+                          (str (sci/eval-string* ctx "(ns-name *ns*)"))))
+          table-prefix (if resolved-ns
+                         (str resolved-ns "/" (if has-slash?
+                                               (subs after-colons (inc (count alias-part)))
+                                               after-colons))
+                         after-colons)
+          display-prefix (if double-colon?
+                           (str "::" (if alias-part (str alias-part "/") ""))
+                           ":")
+          pat (re-pattern (str "^" (java.util.regex.Pattern/quote table-prefix)))]
+      (doall
+       (sequence
+        (comp
+         (filter (fn [k] (re-find pat (str k))))
+         (map (fn [k]
+                (let [k-str (str k)
+                      display (if resolved-ns
+                                ;; Strip resolved ns, show with alias/:: prefix
+                                (let [name-part (subs k-str (inc (count resolved-ns)))]
+                                  (str display-prefix name-part))
+                                (str ":" k-str))]
+                  [nil display "keyword"]))))
+        (keys table))))))
+
 (defn fq-class->completions
   "Completions for fully qualified class names like java.lang.String"
   [classes query]
@@ -164,68 +215,78 @@
      (sequence
       (comp
        (map key)
+       (remove keyword?)
        (map str)
        (filter (fn [fq-class] (re-find pat fq-class)))
        (map (fn [fq-class] [fq-class fq-class "class"])))
       classes))))
 
+(defn- format-completions
+  "Formats raw completion tuples into sorted maps with :candidate, :ns, :type."
+  [query completions]
+  {:completions
+   (->> (map (fn [[namespace name type]]
+               (cond->
+                {:candidate (str name)}
+                 namespace (assoc :ns (str namespace))
+                 type (assoc :type (str type))))
+             completions)
+        distinct
+        (sort-by (fn [{:keys [candidate]}]
+                   [(not (str/starts-with? candidate query))
+                    (count candidate)
+                    candidate])))})
+
 (defn completions
   "Returns completions for the given query string using the SCI context.
-   Returns a set of maps with :candidate (required), :ns (optional), :type (optional)."
+   Returns a map with :completions (list of maps with :candidate, :ns, :type)."
   [ctx query]
   (when (and query (pos? (count query)))
     (try
-      (let [has-namespace? (str/includes? query "/")
-            query-ns (when has-namespace? (symbol (first (str/split query #"/"))))
-            from-current-ns (fully-qualified-syms ctx (sci/eval-string* ctx "(ns-name *ns*)"))
-            from-current-ns (map (fn [sym]
-                                   (if (class-sym? sym)
-                                     (class-sym->completion sym)
-                                     [(namespace sym) (name sym) :unqualified]))
-                                 from-current-ns)
-            alias->ns (sci/eval-string* ctx "(let [m (ns-aliases *ns*)] (zipmap (keys m) (map ns-name (vals m))))")
-            ns->alias (zipmap (vals alias->ns) (keys alias->ns))
-            from-aliased-nss (doall (mapcat
-                                     (fn [alias]
-                                       (let [ns (get alias->ns alias)
-                                             syms (sci/eval-string* ctx (format "(keys (ns-publics '%s))" ns))]
-                                         (map (fn [sym]
-                                                [(str ns) (str sym) :qualified])
-                                              syms)))
-                                     (keys alias->ns)))
-            all-namespaces (->> (sci/eval-string* ctx "(all-ns)")
-                                (map (fn [ns]
-                                       [(str ns) nil :qualified])))
-            from-imports (when query-ns (ns-imports->completions ctx (symbol query-ns) query))
-            ns-found? (sci/eval-string* ctx (format "(find-ns '%s)" query-ns))
-            fully-qualified-names (when-not from-imports
-                                    (when (and has-namespace? ns-found?)
-                                      (let [ns (get alias->ns query-ns query-ns)
-                                            syms (sci/eval-string* ctx (format "(keys (ns-publics '%s))" ns))]
-                                        (map (fn [sym]
-                                               [(str ns) (str sym) :qualified])
-                                             syms))))
-            svs (concat from-current-ns from-aliased-nss all-namespaces fully-qualified-names)
-            completions (keep (fn [entry]
-                                (match alias->ns ns->alias query entry))
-                              svs)
-            completions (concat completions from-imports)
-            import-symbols (import-symbols->completions (:imports @(:env ctx)) query)
-            completions (concat completions import-symbols)
-            fq-classes (fq-class->completions (:raw-classes @(:env ctx)) query)
-            completions (concat completions fq-classes)]
-        {:completions
-         (->> (map (fn [[namespace name type]]
-                     (cond->
-                      {:candidate (str name)}
-                       namespace (assoc :ns (str namespace))
-                       type (assoc :type (str type))))
-                   completions)
-              distinct
-              (sort-by (fn [{:keys [candidate]}]
-                         [(not (str/starts-with? candidate query)) ; prefix matches first
-                          (count candidate)                        ; shorter first
-                          candidate])))})
+      (if (str/starts-with? query ":")
+        ;; Keyword queries — only keyword completions apply
+        (format-completions query (keyword-completions ctx query))
+        ;; Symbol, class, namespace completions
+        (let [has-namespace? (str/includes? query "/")
+              query-ns (when has-namespace? (symbol (first (str/split query #"/"))))
+              from-current-ns (fully-qualified-syms ctx (sci/eval-string* ctx "(ns-name *ns*)"))
+              from-current-ns (map (fn [sym]
+                                     (if (class-sym? sym)
+                                       (class-sym->completion sym)
+                                       [(namespace sym) (name sym) :unqualified]))
+                                   from-current-ns)
+              alias->ns (sci/eval-string* ctx "(let [m (ns-aliases *ns*)] (zipmap (keys m) (map ns-name (vals m))))")
+              ns->alias (zipmap (vals alias->ns) (keys alias->ns))
+              from-aliased-nss (doall (mapcat
+                                       (fn [alias]
+                                         (let [ns (get alias->ns alias)
+                                               syms (sci/eval-string* ctx (format "(keys (ns-publics '%s))" ns))]
+                                           (map (fn [sym]
+                                                  [(str ns) (str sym) :qualified])
+                                                syms)))
+                                       (keys alias->ns)))
+              all-namespaces (->> (sci/eval-string* ctx "(all-ns)")
+                                  (map (fn [ns]
+                                         [(str ns) nil :qualified])))
+              from-imports (when query-ns (ns-imports->completions ctx (symbol query-ns) query))
+              ns-found? (sci/eval-string* ctx (format "(find-ns '%s)" query-ns))
+              fully-qualified-names (when-not from-imports
+                                      (when (and has-namespace? ns-found?)
+                                        (let [ns (get alias->ns query-ns query-ns)
+                                              syms (sci/eval-string* ctx (format "(keys (ns-publics '%s))" ns))]
+                                          (map (fn [sym]
+                                                 [(str ns) (str sym) :qualified])
+                                               syms))))
+              svs (concat from-current-ns from-aliased-nss all-namespaces fully-qualified-names)
+              completions (keep (fn [entry]
+                                  (match alias->ns ns->alias query entry))
+                                svs)
+              completions (concat completions from-imports)
+              import-symbols (import-symbols->completions (:imports @(:env ctx)) query)
+              completions (concat completions import-symbols)
+              fq-classes (fq-class->completions (:raw-classes @(:env ctx)) query)
+              completions (concat completions fq-classes)]
+          (format-completions query completions)))
       (catch Throwable e
         {:error e :completions []}))))
 
