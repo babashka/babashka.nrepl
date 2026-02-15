@@ -3,8 +3,9 @@
   (:require [babashka.nrepl.impl.server :as server]
             [babashka.nrepl.server.middleware :as middleware]
             [clojure.string :as string]
-            [sci.core :as sci])
-  (:import [java.net ServerSocket]))
+            [sci.impl.vars :as vars])
+  (:import [java.net ServerSocket]
+           [java.util.concurrent Callable FutureTask]))
 
 (set! *warn-on-reflection* true)
 
@@ -33,5 +34,9 @@
     (when-not quiet
       (println (format "Started nREPL server at %s:%d" (.getHostAddress inet-address) (.getLocalPort socket-server))))
     {:socket socket-server
-     :future (sci/future
-               (server/listen ctx socket-server opts))}))
+     :future (let [fut (FutureTask. ^Callable (vars/binding-conveyor-fn
+                                                (fn [] (server/listen ctx socket-server opts))))]
+               (doto (Thread. fut)
+                 (.setDaemon false)
+                 (.start))
+               fut)}))

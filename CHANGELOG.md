@@ -4,6 +4,7 @@ All notable changes to this project will be documented in this file. This change
 
 ## Unreleased
 
+- Fix [#71](https://github.com/babashka/babashka.nrepl/issues/71): use non-daemon threads for nREPL server so the process stays alive without `@(promise)`
 - Fix #1863 part 1: `info` and `lookup` op. `lookup` carries nested `info` map whereas `info` is a flatmap.
 
 ## 0.0.8 (2025-09-04)

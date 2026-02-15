@@ -7,7 +7,8 @@
    [bencode.core :refer [read-bencode]]
    [clojure.pprint :as pprint]
    [clojure.string :as str]
-   [sci.core :as sci])
+   [sci.core :as sci]
+   [sci.impl.vars :as vars])
   (:import
    [java.io
     BufferedOutputStream
@@ -358,20 +359,21 @@
         out (BufferedOutputStream. out)
         rf (xform send-reduce)]
     (when debug (println "Connected."))
-    (sci/future
-      (binding [*1 nil
-                *2 nil
-                *3 nil
-                *e nil]
-        (sci/with-bindings
-          (merge {sci/ns (sci/create-ns 'user nil)
-                  sci/print-length @sci/print-length
-                  sci/*1 nil
-                  sci/*2 nil
-                  sci/*3 nil
-                  sci/*e nil}
-                 (zipmap thread-bind (map deref thread-bind)))
-          (session-loop rf in out {:opts opts
-                                   :id "pre-init"
-                                   :ctx ctx}))))
+    (.start (Thread. ^Runnable (vars/binding-conveyor-fn
+                       (fn []
+                         (binding [*1 nil
+                                   *2 nil
+                                   *3 nil
+                                   *e nil]
+                           (sci/with-bindings
+                             (merge {sci/ns (sci/create-ns 'user nil)
+                                     sci/print-length @sci/print-length
+                                     sci/*1 nil
+                                     sci/*2 nil
+                                     sci/*3 nil
+                                     sci/*e nil}
+                                    (zipmap thread-bind (map deref thread-bind)))
+                             (session-loop rf in out {:opts opts
+                                                      :id "pre-init"
+                                                      :ctx ctx})))))))
     (recur ctx listener opts)))
