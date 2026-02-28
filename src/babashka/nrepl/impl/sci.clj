@@ -249,12 +249,16 @@
         ;; Symbol, class, namespace completions
         (let [has-namespace? (str/includes? query "/")
               query-ns (when has-namespace? (symbol (first (str/split query #"/"))))
-              from-current-ns (fully-qualified-syms ctx (sci/eval-string* ctx "(ns-name *ns*)"))
+              current-ns-sym (sci/eval-string* ctx "(ns-name *ns*)")
+              from-current-ns (fully-qualified-syms ctx current-ns-sym)
               from-current-ns (map (fn [sym]
                                      (if (class-sym? sym)
                                        (class-sym->completion sym)
                                        [(namespace sym) (name sym) :unqualified]))
                                    from-current-ns)
+              ;; Types from current namespace (deftype/defrecord names)
+              from-types (let [types (get-in @(:env ctx) [:namespaces current-ns-sym :types])]
+                           (map (fn [[k _]] [nil (str k) :unqualified]) types))
               alias->ns (sci/eval-string* ctx "(let [m (ns-aliases *ns*)] (zipmap (keys m) (map ns-name (vals m))))")
               ns->alias (zipmap (vals alias->ns) (keys alias->ns))
               from-aliased-nss (doall (mapcat
@@ -277,7 +281,7 @@
                                           (map (fn [sym]
                                                  [(str ns) (str sym) :qualified])
                                                syms))))
-              svs (concat from-current-ns from-aliased-nss all-namespaces fully-qualified-names)
+              svs (concat from-current-ns from-types from-aliased-nss all-namespaces fully-qualified-names)
               completions (keep (fn [entry]
                                   (match alias->ns ns->alias query entry))
                                 svs)

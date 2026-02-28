@@ -52,3 +52,21 @@
   (testing "symbol completions still work"
     (let [results (:completions (sci-helpers/completions test-ctx "map"))]
       (is (some #(= "map" (:candidate %)) results)))))
+
+(deftest deftype-completions-test
+  (let [ctx (opts/init {})]
+    (sci/eval-string* ctx "(defrecord MyRec [x y])")
+    (testing "defrecord type name completes"
+      (let [results (:completions (sci-helpers/completions ctx "MyR"))]
+        (is (some #(= "MyRec" (:candidate %)) results))))
+    (testing "defrecord constructor completes"
+      (let [results (:completions (sci-helpers/completions ctx "->My"))]
+        (is (some #(= "->MyRec" (:candidate %)) results)))))
+  (let [ctx (opts/init {})]
+    (sci/eval-string* ctx "(deftype MyType [x])")
+    (testing "deftype type name completes"
+      (let [results (:completions (sci-helpers/completions ctx "MyT"))]
+        (is (some #(= "MyType" (:candidate %)) results))))
+    (testing "deftype constructor completes"
+      (let [results (:completions (sci-helpers/completions ctx "->My"))]
+        (is (some #(= "->MyType" (:candidate %)) results))))))
