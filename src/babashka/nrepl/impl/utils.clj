@@ -15,8 +15,9 @@
 
 (defn send [^OutputStream os msg {:keys [debug-send]}]
   (when debug-send (prn "Sending" msg))
-  (write-bencode os msg)
-  (.flush os))
+  (locking os
+    (write-bencode os msg)
+    (.flush os)))
 
 (defn send-exception [os msg ^Throwable ex {:keys [debug] :as opts}]
   (let [d (ex-data ex)

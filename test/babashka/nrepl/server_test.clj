@@ -9,7 +9,8 @@
             [clojure.string :as str]
             [clojure.test :as t :refer [deftest is testing]]
             [sci.core :as sci])
-  (:import [java.net Socket]))
+  (:import [java.io PushbackInputStream]
+           [java.net Socket]))
 
 (def debug? false)
 
@@ -659,6 +660,44 @@
         (is (= @responses-log
                [{"status" #{"error" "unknown-op" "done"}, "session" "none", "id" "unknown"}
                 {"status" #{"error" "unknown-op" "done"}, "session" "none", "id" "unknown"}]))))))
+
+(deftest concurrent-output-test
+  (testing "concurrent writes to *out* from threads must not corrupt bencode frames"
+    (let [port (inc nrepl-test-port)
+          service (server/start-server!
+                   (sci/init {:features #{:bb}
+                              :classes {:allow :all
+                                        'java.lang.Thread Thread}})
+                   {:host "0.0.0.0" :port port})]
+      (try
+        (test-utils/wait-for-port "localhost" port)
+        (with-open [socket (Socket. "127.0.0.1" port)
+                    in (PushbackInputStream. (.getInputStream socket))
+                    os (.getOutputStream socket)]
+          (bencode/write-bencode os {"op" "clone"})
+          (let [session (:new-session (read-msg (bencode/read-bencode in)))
+                code (str "(let [o *out*]"
+                          "  (dotimes [k 50]"
+                          "    (.start (java.lang.Thread."
+                          "             (fn []"
+                          "               (binding [*out* o]"
+                          "                 (dotimes [j 1000]"
+                          "                   (println \"t\" k \"line\" j)"
+                          "                   (.flush *out*)))))))"
+                          "  (java.lang.Thread/sleep 200)"
+                          "  :ok)")]
+            (bencode/write-bencode os {"op" "eval" "code" code
+                                       "session" session "id" 1})
+            ;; read-bencode throws on interleaved frames — that is the bug.
+            (loop [saw-value? false]
+              (let [msg (read-msg (bencode/read-bencode in))
+                    status (set (:status msg))]
+                (cond
+                  (contains? status "done") (is saw-value? "expected :ok value reply")
+                  (= ":ok" (:value msg)) (recur true)
+                  :else (recur saw-value?))))))
+        (finally
+          (server/stop-server! service))))))
 
 ;;;; Scratch
 
